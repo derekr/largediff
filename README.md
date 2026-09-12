@@ -9,6 +9,8 @@ a long-lived SSE stream.
 
 ## Run
 
+Requires Bun 1.x (developed against 1.3).
+
 ```
 bun install
 bun run dev
