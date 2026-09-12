@@ -16,13 +16,13 @@
 
 import type { DiffEngine } from "../diff/generator.ts";
 import { FILE_HEADER_GAP_PX } from "../diff/layout.ts";
-import { type LineSpan, renderFiles, TOKEN_CLASS } from "../render/files.ts";
-import { renderAppInner } from "../render/shell.ts";
+import { type LineSpan, renderFiles, TOKEN_CLASS } from "../render/files.tsx";
+import { renderAppInner } from "../render/shell.tsx";
 import {
   renderSidebarWindow,
   SIDEBAR_ROW_HEIGHT_PX,
   sidebarSliceFileIds,
-} from "../render/sidebar.ts";
+} from "../render/sidebar.tsx";
 import type { Metrics } from "../server/metrics.ts";
 import type { FileId, HighlightKind, TokenSpans } from "../store/diff.ts";
 import type { ReviewSession, SessionId } from "./types.ts";

@@ -13,6 +13,14 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
+    // Local JSX runtime (src/render/jsx-runtime.ts) under the standard
+    // react-jsx transform: zero dependencies, and both tsc and Bun resolve
+    // the alias at compile/run time. Both entries are needed: Bun uses the
+    // dev runtime unless NODE_ENV=production.
+    "paths": {
+      "react/jsx-runtime": ["./src/render/jsx-runtime.ts"],
+      "react/jsx-dev-runtime": ["./src/render/jsx-runtime.ts"]
+    },
 
     // Best practices
     "strict": true,

@@ -20,24 +20,13 @@
 //     sidebar always lands on the file the diff is showing.
 
 import type { DiffFileSummary, FileId } from "../store/diff.ts";
+import { type JsxNode, renderToString, StaticHtml } from "./jsx-runtime.ts";
 
 export const SIDEBAR_ROW_HEIGHT_PX = 32;
 
 // Overscan above / below the visible window so a typical wheel/trackpad
 // scroll stays inside already-mounted rows until the next push lands.
 export const SIDEBAR_OVERSCAN_PX = 800;
-
-const ESC: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESC[c] ?? c);
-}
 
 export interface SidebarWindowResult {
   start: number;
@@ -50,13 +39,17 @@ export function renderSidebarShell(
   initialRowsHtml: string,
 ): string {
   const totalHeight = files.length * SIDEBAR_ROW_HEIGHT_PX;
-  return (
-    `<header class="file-tree-header">` +
-    `<span class="count">${files.length} files</span>` +
-    `</header>` +
-    `<div class="file-list">` +
-    `<div class="file-rows" style="height:${totalHeight}px;position:relative;">${initialRowsHtml}</div>` +
-    `</div>`
+  return renderToString(
+    <>
+      <header class="file-tree-header">
+        <span class="count">{files.length} files</span>
+      </header>
+      <div class="file-list">
+        <div class="file-rows" style={`height:${totalHeight}px;position:relative;`}>
+          <StaticHtml html={initialRowsHtml} />
+        </div>
+      </div>
+    </>,
   );
 }
 
@@ -76,7 +69,7 @@ export function renderSidebarWindow(
   for (let i = start; i <= end; i++) {
     const f = files[i];
     if (f === undefined) continue;
-    parts.push(renderSidebarRow(f, i * rh, f.id === activeFileId));
+    parts.push(renderToString(<FileRow file={f} top={i * rh} active={f.id === activeFileId} />));
   }
   // Joined with "\n" only so the projection's newline split lands each
   // row on its own `elements` SSE data line — a raw newline can't appear
@@ -87,23 +80,34 @@ export function renderSidebarWindow(
   return { start, end, html: parts.join("\n") };
 }
 
-export function renderSidebarRow(f: DiffFileSummary, top: number, active: boolean): string {
-  const id = f.id;
-  const path = escapeHtml(f.path);
-  const lang = escapeHtml(f.language);
-  const cls = active ? "file-row active" : "file-row";
+// One file row: navigation lives in a `data-on:click` POST, not an href —
+// the `href="#"` is a keyboard-focus affordance only.
+function FileRow(props: { file: DiffFileSummary; top: number; active: boolean }): JsxNode {
+  const { file: f, top, active } = props;
   return (
-    `<a id="file-row-${id}" class="${cls}" href="#" data-file-id="${id}" ` +
-    `style="top:${top}px" ` +
-    `data-on:click__prevent="$_drawerOpen = false; @post('/sessions/' + $_sid + '/files/${id}/jump')">` +
-    `<span class="path" title="${path}">${path}</span>` +
-    `<span class="meta">` +
-    `<span class="lang">${lang}</span>` +
-    `<span class="adds">+${f.additions}</span>` +
-    `<span class="dels">-${f.deletions}</span>` +
-    `</span>` +
-    `</a>`
+    <a
+      id={`file-row-${f.id}`}
+      class={active ? "file-row active" : "file-row"}
+      // biome-ignore lint/a11y/useValidAnchor: focus affordance
+      href="#"
+      data-file-id={f.id}
+      style={`top:${top}px`}
+      data-on:click__prevent={`$_drawerOpen = false; @post('/sessions/' + $_sid + '/files/${f.id}/jump')`}
+    >
+      <span class="path" title={f.path}>
+        {f.path}
+      </span>
+      <span class="meta">
+        <span class="lang">{f.language}</span>
+        <span class="adds">+{f.additions}</span>
+        <span class="dels">-{f.deletions}</span>
+      </span>
+    </a>
   );
+}
+
+export function renderSidebarRow(f: DiffFileSummary, top: number, active: boolean): string {
+  return renderToString(<FileRow file={f} top={top} active={active} />);
 }
 
 export function sidebarSliceFileIds(

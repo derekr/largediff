@@ -7,7 +7,7 @@
 import { createDiffEngine } from "./diff/generator.ts";
 import { FILE_HEADER_GAP_PX } from "./diff/layout.ts";
 import { renderDoc } from "./render/doc.ts";
-import { renderShell } from "./render/shell.ts";
+import { renderShell } from "./render/shell.tsx";
 import { type CommandKind, metricsFromEnv } from "./server/metrics.ts";
 import { clientIp, IpRateLimiter, parseBucketSpec } from "./server/ratelimit.ts";
 import {

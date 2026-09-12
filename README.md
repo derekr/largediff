@@ -69,6 +69,44 @@ through the system:
    POST validates, and how the throttle turns a fling into a steady
    cadence of pushes.
 
+### The pattern vs the demo
+
+Roughly 1,700 lines carry the two ideas this repo exists to show
+(hypermedia + windowing); everything else is demo scaffolding or
+production plumbing. The seams are interfaces, so you can read the
+pattern without the scaffolding:
+
+**The pattern — read these, in this order:**
+
+| Code | Pattern role |
+| --- | --- |
+| `src/session/projection.ts` | `pushProjection` — state → wire bytes, the one read-side function |
+| `src/server.ts` (route table) | URL-addressable commands, every POST → 204 |
+| `src/session/stream.ts` | the long-lived SSE stream payloads ride on |
+| `src/session/commands.ts` | validated command mutations |
+| `src/session/viewpush.ts` | scroll→push cadence: throttle, coalesce, echo-drop |
+| `src/render/files.tsx` | the window slice rendered as components (`<FileSection>`, `<Row>`, `<TokenLine>`) |
+| `src/diff/layout.ts` | the flat pixel table that makes slicing O(1) |
+| client Datastar attributes in `render/shell.tsx` | the read-side contract: signals in, one morph out |
+
+**Scaffolding — ignore on first read, swap freely:**
+
+- `src/diff/{generator,snippets,rng}.ts` — synthetic diff generator. The
+  app only touches it through `DiffSynthesizer` (`meta`/`file`/`tokens`,
+  `src/store/diff.ts`) plus `layout()`. Point those four methods at a
+  real backend and the pattern is unchanged.
+- `src/highlight/tokenize.ts` — intentionally-regex tokenizer behind the
+  same `tokens()` contract.
+- `src/server/{compress,metrics,ratelimit}.ts` — production concerns
+  (SSE compression, stdout telemetry, rate limits), none of it
+  pattern-relevant.
+- `src/client/{measure,ranges,poke}.ts` + `scripts/render-parity.ts` —
+  measurement apparatus for the A/B modes and render parity.
+
+The one thing that can't be abstracted away is the *interplay* — the
+throttle→push→slice loop spans those four session/render files, which is
+why it's presented as a unit rather than a module.
+
 ## SSE delivery lab
 
 The standalone SSE-delivery harness — built to isolate a WebKit regression

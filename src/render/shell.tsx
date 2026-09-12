@@ -3,7 +3,7 @@
 // Layout: <body> contains a `<div id="app">` whose inner HTML is the whole
 // content tree (topbar, drawer backdrop, sidebar, scroller). Every server
 // push morphs `#app` in one go — the "fat morph" model. There's no diff
-// vs sidebar vs signals split anymore: all state feeds into `renderAppInner`
+// vs sidebar vs signals split anymore: all state feeds into `<AppInner>`
 // and ships as one `datastar-patch-elements` event per push.
 //
 // Signal categories on body:
@@ -21,7 +21,8 @@
 
 import type { InitialPaint } from "../session/projection.ts";
 import type { DiffFileSummary } from "../store/diff.ts";
-import { renderSidebarShell } from "./sidebar.ts";
+import { type JsxNode, renderToString, StaticHtml } from "./jsx-runtime.ts";
+import { renderSidebarShell } from "./sidebar.tsx";
 
 // One token per server process. Each deploy spins a new VM, so the token
 // rotates on deploy — any stale HTML that survived a cache will reference
@@ -31,38 +32,15 @@ import { renderSidebarShell } from "./sidebar.ts";
 // Safari has been observed to ignore intermittently.
 const BUILD_ID = Date.now().toString(36);
 
-// Minimal HTML-attribute escape for the dynamically-built `data-init`
-// expression. The cmd element wraps the expression in double quotes so
-// `"` and `&` are the only characters that would break the attribute.
-function escapeAttr(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
-}
-
-const ESC: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-// Full escape for values that reach text content or attribute position.
-// `sid` is server-generated hex today, but nothing at this layer enforces
-// that — escape at the sink so a future caller passing user input can't
-// turn the topbar's `<code>` or a signals attribute into an injection
-// point.
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESC[c] ?? c);
-}
-
-// `data-signals` is a single-quoted attribute and `JSON.stringify` never
-// escapes `'` — a string signal value containing one would terminate the
-// attribute mid-JSON. Every current value is a number or server-chosen,
-// but escaping here means the first user-influenced string signal isn't
-// a breakout. The HTML parser decodes the entities before Datastar reads
-// the attribute, so the JSON round-trips intact.
+// `data-signals` carries JSON in a double-quoted attribute. The runtime
+// escapes `"` (and `&`) on the way out and the HTML parser decodes the
+// entities before Datastar reads the value, so the JSON round-trips
+// intact — including a future user-influenced string signal, which can't
+// terminate the attribute. `sid` is server-generated hex today, but the
+// same rule covers the topbar `<code>` sink: escape at the runtime,
+// not at scattered call sites.
 function signalsAttr(signals: unknown): string {
-  return escapeHtml(JSON.stringify(signals));
+  return JSON.stringify(signals);
 }
 
 export interface AppInnerArgs {
@@ -101,8 +79,9 @@ function formatBytes(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(2)} MB`;
 }
 
-function renderWireChip(stats: AppInnerArgs["wireStats"]): string {
-  if (stats === undefined) return "";
+function WireChip(props: { stats: AppInnerArgs["wireStats"] }): JsxNode | null {
+  const stats = props.stats;
+  if (stats === undefined) return null;
   const { bytesIn, bytesOut, encoding } = stats;
   // First push the user sees: the writer's counters are sampled
   // *before* this push's bytes flow, so on the very first emit
@@ -111,16 +90,54 @@ function renderWireChip(stats: AppInnerArgs["wireStats"]): string {
   // numbers on the next push — without the placeholder the chip
   // would only appear after the user did one or two things.
   if (bytesIn === 0) {
-    return `<span class="wire-chip" title="Waiting for the first SSE push"><span class="wire-label">wire</span><span class="wire-hint">measuring…</span></span>`;
+    return (
+      <span class="wire-chip" title="Waiting for the first SSE push">
+        <span class="wire-label">wire</span>
+        <span class="wire-hint">measuring…</span>
+      </span>
+    );
   }
   if (encoding === "identity") {
     // Safari path — no compression by design. Surface the raw
     // bytes so the user knows what the wire is costing.
-    return `<span class="wire-chip" title="No compression for Safari — text/event-stream body buffering forces identity encoding"><span class="wire-label">wire</span><span class="wire-value">${formatBytes(bytesIn)}</span><span class="wire-hint">identity</span></span>`;
+    return (
+      <span
+        class="wire-chip"
+        title="No compression for Safari — text/event-stream body buffering forces identity encoding"
+      >
+        <span class="wire-label">wire</span>
+        <span class="wire-value">{formatBytes(bytesIn)}</span>
+        <span class="wire-hint">identity</span>
+      </span>
+    );
   }
   const saved = Math.max(0, bytesIn - bytesOut);
   const pct = bytesIn > 0 ? Math.round((saved / bytesIn) * 100) : 0;
-  return `<span class="wire-chip" title="${formatBytes(bytesOut)} on the wire vs ${formatBytes(bytesIn)} uncompressed (${encoding})"><span class="wire-label">wire</span><span class="wire-value">${formatBytes(bytesOut)}</span><span class="wire-hint">saved ${formatBytes(saved)} · ${pct}%</span></span>`;
+  return (
+    <span
+      class="wire-chip"
+      title={`${formatBytes(bytesOut)} on the wire vs ${formatBytes(bytesIn)} uncompressed (${encoding})`}
+    >
+      <span class="wire-label">wire</span>
+      <span class="wire-value">{formatBytes(bytesOut)}</span>
+      <span class="wire-hint">
+        saved {formatBytes(saved)} · {pct}%
+      </span>
+    </span>
+  );
+}
+
+// The one-shot command element: a transient `<div>` carrying the morph's
+// signal updates and imperative init script on a unique id.
+function CmdElement(props: NonNullable<AppInnerArgs["commands"]>) {
+  const { signals, init, cmdSeq } = props;
+  return (
+    <div
+      id={`cmd-${cmdSeq}`}
+      data-signals={signals === undefined ? undefined : signalsAttr(signals)}
+      data-init={init !== undefined && init.length > 0 ? init : undefined}
+    ></div>
+  );
 }
 
 // Renders the inner HTML of `<div id="app">` — both for the initial shell
@@ -130,66 +147,98 @@ function renderWireChip(stats: AppInnerArgs["wireStats"]): string {
 // `#f-<fid>`, `#file-row-<fid>`) across morphs, keeping scroll position,
 // focus, and Datastar's one-shot `data-init` from re-firing.
 export function renderAppInner(args: AppInnerArgs): string {
+  return renderToString(<AppInner {...args} />);
+}
+
+function AppInner(args: AppInnerArgs) {
   const { sid, totalHeight, files, initial, commands, wireStats, pushSeq } = args;
-  const wireChip = renderWireChip(wireStats);
-  let cmd = "";
-  if (commands !== undefined) {
-    const attrs: string[] = [`id="cmd-${commands.cmdSeq}"`];
-    if (commands.signals !== undefined) {
-      attrs.push(`data-signals='${signalsAttr(commands.signals)}'`);
-    }
-    if (commands.init !== undefined && commands.init.length > 0) {
-      attrs.push(`data-init="${escapeAttr(commands.init)}"`);
-    }
-    cmd = `<div ${attrs.join(" ")}></div>`;
-  }
-  const marker = `<div id="push-seq" data-push="${pushSeq ?? 0}" hidden></div>`;
-  return `${marker}${cmd}<header id="topbar" class="topbar">
-<button
-  id="menu-toggle"
-  class="menu-toggle"
-  type="button"
-  aria-label="Toggle file list"
-  data-attr:aria-expanded="$_drawerOpen ? 'true' : 'false'"
-  data-on:click="$_drawerOpen = !$_drawerOpen"
->☰</button>
-<h1>largediff</h1>
-<nav class="tabs" aria-label="review tabs"><span class="tab active">Files changed</span></nav>
-<button
-  id="back-to-top"
-  class="back-to-top"
-  type="button"
-  title="Back to top"
-  aria-label="Back to top"
-  data-on:click__prevent="@post('/sessions/' + $_sid + '/top')"
->↑ Top</button>
-<div id="chrome-toggle" class="chrome-toggle" role="group" aria-label="Rendering mode">
-<button
-  id="chrome-github"
-  type="button"
-  data-class:active="$chrome === 'github'"
-  data-on:click="$chrome = 'github'; @post('/sessions/' + $_sid + '/settings')"
->GitHub</button>
-<button
-  id="chrome-bleed"
-  type="button"
-  data-class:active="$chrome === 'bleed'"
-  data-on:click="$chrome = 'bleed'; @post('/sessions/' + $_sid + '/settings')"
->Full bleed</button>
-</div>
-${wireChip}<span class="sid">session <code>${escapeHtml(sid)}</code></span>
-</header>
-<div id="drawer-backdrop" aria-hidden="true" data-on:click="$_drawerOpen = false"></div>
-<div id="layout" class="layout">
-<aside id="file-tree" aria-label="File tree">${renderSidebarShell(files, initial.sidebarHtml)}</aside>
-<main
-  id="scroller"
-  data-ref:scroller
-  data-init="@get('/sessions/' + $_sid + '/stream', {requestCancellation: 'none', openWhenHidden: true})"
-  data-on:scroll__throttle.32ms="$scrollTop = $scroller.scrollTop; $height = $scroller.clientHeight; @post('/sessions/' + $_sid + '/view')"
-  data-on:scrollend="$scrollTop = $scroller.scrollTop; $height = $scroller.clientHeight; @post('/sessions/' + $_sid + '/view')"
-><div id="ds-window" data-attr:data-chrome="$chrome" data-chrome="${initial.chrome}" style="height:${totalHeight}px">${initial.diffHtml}</div></main>
-</div>`;
+  // The scroller's stream + scroll telemetry carry Datastar expressions
+  // with dots in their attribute names (`data-on:scroll__throttle.32ms`),
+  // which JSX attribute syntax cannot spell — they ride in a spread object.
+  const scrollerAttrs = {
+    "data-on:scroll__throttle.32ms":
+      "$scrollTop = $scroller.scrollTop; $height = $scroller.clientHeight; @post('/sessions/' + $_sid + '/view')",
+    "data-on:scrollend":
+      "$scrollTop = $scroller.scrollTop; $height = $scroller.clientHeight; @post('/sessions/' + $_sid + '/view')",
+  };
+  return (
+    <>
+      <div id="push-seq" data-push={pushSeq ?? 0} hidden></div>
+      {commands !== undefined ? <CmdElement {...commands} /> : null}
+      <header id="topbar" class="topbar">
+        <button
+          id="menu-toggle"
+          class="menu-toggle"
+          type="button"
+          aria-label="Toggle file list"
+          data-attr:aria-expanded="$_drawerOpen ? 'true' : 'false'"
+          data-on:click="$_drawerOpen = !$_drawerOpen"
+        >
+          ☰
+        </button>
+        <h1>largediff</h1>
+        <nav class="tabs" aria-label="review tabs">
+          <span class="tab active">Files changed</span>
+        </nav>
+        <button
+          id="back-to-top"
+          class="back-to-top"
+          type="button"
+          title="Back to top"
+          aria-label="Back to top"
+          data-on:click__prevent="@post('/sessions/' + $_sid + '/top')"
+        >
+          ↑ Top
+        </button>
+        {/* biome-ignore lint/a11y/useSemanticElements: a fieldset would
+            restyle the toggle and break morph stability; the group role
+            here is intentional and long-standing. */}
+        <div id="chrome-toggle" class="chrome-toggle" role="group" aria-label="Rendering mode">
+          <button
+            id="chrome-github"
+            type="button"
+            data-class:active="$chrome === 'github'"
+            data-on:click="$chrome = 'github'; @post('/sessions/' + $_sid + '/settings')"
+          >
+            GitHub
+          </button>
+          <button
+            id="chrome-bleed"
+            type="button"
+            data-class:active="$chrome === 'bleed'"
+            data-on:click="$chrome = 'bleed'; @post('/sessions/' + $_sid + '/settings')"
+          >
+            Full bleed
+          </button>
+        </div>
+        <WireChip stats={wireStats} />
+        <span class="sid">
+          session <code>{sid}</code>
+        </span>
+      </header>
+      <div id="drawer-backdrop" aria-hidden="true" data-on:click="$_drawerOpen = false"></div>
+      <div id="layout" class="layout">
+        <aside id="file-tree" aria-label="File tree">
+          <StaticHtml html={renderSidebarShell(files, initial.sidebarHtml)} />
+        </aside>
+        <main
+          id="scroller"
+          data-ref:scroller
+          data-init="@get('/sessions/' + $_sid + '/stream', {requestCancellation: 'none', openWhenHidden: true})"
+          {...scrollerAttrs}
+        >
+          <div
+            id="ds-window"
+            data-attr:data-chrome="$chrome"
+            data-chrome={initial.chrome}
+            style={`height:${totalHeight}px`}
+          >
+            <StaticHtml html={initial.diffHtml} />
+          </div>
+        </main>
+      </div>
+    </>
+  );
 }
 
 // `?trace=1` — SSE tap, installed ahead of everything else.
@@ -295,6 +344,22 @@ const TRACE_SCRIPT = `<script>
 })();
 </script>`;
 
+// Inline scroll-restore for reloads. Built as a JS string and embedded via
+// `<script>{js}</script>` — the runtime treats script content as raw text,
+// so the single quotes survive verbatim, byte-identical to before.
+function scrollRestoreJs(initial: InitialPaint): string | null {
+  if (initial.scrollerScrollTop === 0 && initial.sidebarScrollTop === 0) return null;
+  const setScroller =
+    initial.scrollerScrollTop > 0
+      ? `var s=document.getElementById('scroller');if(s)s.scrollTop=${initial.scrollerScrollTop};`
+      : "";
+  const setSidebar =
+    initial.sidebarScrollTop > 0
+      ? `var f=document.querySelector('#file-tree .file-list');if(f)f.scrollTop=${initial.sidebarScrollTop};`
+      : "";
+  return `(function(){${setScroller}${setSidebar}})();`;
+}
+
 export function renderShell(
   sid: string,
   totalHeight: number,
@@ -310,39 +375,28 @@ export function renderShell(
     chrome: initial.chrome,
     _drawerOpen: false,
   });
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>largediff — review</title>
-    <link rel="stylesheet" href="/static/styles.css?v=${BUILD_ID}" />
-    ${trace ? STREAM_COUNTER_SCRIPT : ""}
-    ${trace ? TRACE_SCRIPT : ""}
-    <script type="module" src="/static/datastar.js?v=${BUILD_ID}"></script>
-    <script type="module" src="/static/highlights.js?v=${BUILD_ID}"></script>
-  </head>
-  <body
-    data-signals='${signals}'
-    data-class:drawer-open="$_drawerOpen"
-  ><div id="app">${renderAppInner({ sid, totalHeight, files, initial })}</div>${renderInitialScrollScript(initial)}
-  </body>
-</html>
-`;
-}
-
-// Inline scroll-restore for reloads. Skipped on default state (both
-// targets at 0) so a fresh-session load doesn't pay the ~40 ms layout
-// flush from assigning `scrollTop`.
-function renderInitialScrollScript(initial: InitialPaint): string {
-  if (initial.scrollerScrollTop === 0 && initial.sidebarScrollTop === 0) return "";
-  const setScroller =
-    initial.scrollerScrollTop > 0
-      ? `var s=document.getElementById('scroller');if(s)s.scrollTop=${initial.scrollerScrollTop};`
-      : "";
-  const setSidebar =
-    initial.sidebarScrollTop > 0
-      ? `var f=document.querySelector('#file-tree .file-list');if(f)f.scrollTop=${initial.sidebarScrollTop};`
-      : "";
-  return `\n<script>(function(){${setScroller}${setSidebar}})();</script>`;
+  const scrollJs = scrollRestoreJs(initial);
+  return (
+    "<!doctype html>\n" +
+    renderToString(
+      <html lang="en">
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width,initial-scale=1" />
+          <title>largediff — review</title>
+          <link rel="stylesheet" href={`/static/styles.css?v=${BUILD_ID}`} />
+          {trace ? <StaticHtml html={STREAM_COUNTER_SCRIPT} /> : null}
+          {trace ? <StaticHtml html={TRACE_SCRIPT} /> : null}
+          <script type="module" src={`/static/datastar.js?v=${BUILD_ID}`}></script>
+          <script type="module" src={`/static/highlights.js?v=${BUILD_ID}`}></script>
+        </head>
+        <body data-signals={signals} data-class:drawer-open="$_drawerOpen">
+          <div id="app">
+            <AppInner sid={sid} totalHeight={totalHeight} files={files} initial={initial} />
+          </div>
+          {scrollJs !== null ? <script>{scrollJs}</script> : null}
+        </body>
+      </html>,
+    )
+  );
 }

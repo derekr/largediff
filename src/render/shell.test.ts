@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { InitialPaint } from "../session/projection.ts";
-import { renderAppInner, renderShell } from "./shell.ts";
+import { renderAppInner, renderShell } from "./shell.tsx";
 
 const PAINT: InitialPaint = {
   diffHtml: "<section></section>",
@@ -41,7 +41,7 @@ describe("sid escaping", () => {
 
   test("renderShell's data-signals attribute survives quotes in a string signal", () => {
     const html = renderShell(HOSTILE_SID, 100, [], PAINT);
-    const m = /data-signals='([^']*)'/.exec(html);
+    const m = /data-signals="([^"]*)"/.exec(html);
     expect(m).not.toBeNull();
     // The captured attribute value must round-trip: entity-decode (as the
     // HTML parser does) then JSON.parse must reproduce the hostile sid
@@ -59,7 +59,7 @@ describe("sid escaping", () => {
       initial: PAINT,
       commands: { signals: { navEpoch: 7 }, cmdSeq: 3 },
     });
-    const m = /id="cmd-3" data-signals='([^']*)'/.exec(html);
+    const m = /id="cmd-3" data-signals="([^"]*)"/.exec(html);
     expect(m).not.toBeNull();
     expect(JSON.parse(decodeEntities(m?.[1] ?? ""))).toEqual({ navEpoch: 7 });
   });

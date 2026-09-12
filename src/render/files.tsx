@@ -24,6 +24,7 @@
 import { type Layout, ROW_HEIGHTS, ROW_LINE, type RowDescriptor } from "../diff/layout.ts";
 import type { HighlightMode } from "../session/types.ts";
 import type { DiffFileSummary, FileId, HighlightKind } from "../store/diff.ts";
+import { type JsxNode, renderToString } from "./jsx-runtime.ts";
 
 // Single-glance class names for syntax tokens. Short to keep wire bytes
 // low — they repeat ~hundreds of times per push and compress as a single
@@ -41,7 +42,7 @@ export const TOKEN_CLASS: Record<HighlightKind, string> = {
 // Sorted by `start` (ascending) so the renderer can walk text + spans
 // in one pass. The tokenizer CAN emit overlaps — it scans strings before
 // comments, so `/* "abc" */` yields a comment span and an interior string
-// span. `renderTokenizedLine` clamps and skips so the earlier-starting span
+// span. `TokenLine` clamps and skips so the earlier-starting span
 // wins and no text is lost.
 export type LineSpan = { start: number; end: number; cls: string };
 
@@ -115,20 +116,34 @@ export function renderFiles(ctx: FilesContext): FilesSlice {
   for (let fi = start; fi <= end; fi++) {
     const summary = ctx.fileSummaries[fi];
     if (summary === undefined) continue;
-    sections.push(renderSection(ctx, fi, summary, topPx, botPx, visibleByFile));
+    sections.push(
+      renderToString(
+        <FileSection
+          ctx={ctx}
+          fileIndex={fi}
+          summary={summary}
+          topPx={topPx}
+          botPx={botPx}
+          visibleByFile={visibleByFile}
+        />,
+      ),
+    );
   }
 
   return { fileStart: start, fileEnd: end, html: sections.join("\n"), visibleByFile };
 }
 
-function renderSection(
-  ctx: FilesContext,
-  fileIndex: number,
-  summary: DiffFileSummary,
-  topPx: number,
-  botPx: number,
-  visibleByFile: Map<FileId, { minLine: number; maxLine: number }>,
-): string {
+interface FileSectionProps {
+  ctx: FilesContext;
+  fileIndex: number;
+  summary: DiffFileSummary;
+  topPx: number;
+  botPx: number;
+  visibleByFile: Map<FileId, { minLine: number; maxLine: number }>;
+}
+
+function FileSection(props: FileSectionProps) {
+  const { ctx, fileIndex, summary, topPx, botPx, visibleByFile } = props;
   const layout = ctx.layout;
   const fileTop = layout.pixelTopForFile(fileIndex);
   const fileHeight = layout.pixelHeightOfFile(fileIndex);
@@ -149,26 +164,6 @@ function renderSection(
   }
 
   const fileId = summary.id;
-  const path = escapeHtml(summary.path);
-  const lang = escapeHtml(summary.language);
-  const adds = summary.additions ?? 0;
-  const dels = summary.deletions ?? 0;
-
-  // Jump targeting lives on the server's `jumpToPx` signal rather than a
-  // `data-anchor` attribute; the body-level data-effect reads the signal
-  // and calls scrollTo with the exact pixel. Robust to the target
-  // section's content-visibility:auto skipping its subtree's layout, and
-  // to Safari's inconsistent scrollIntoView behaviour on sticky elements.
-  const headerHtml =
-    `<header class="file-card-header">` +
-    `<span class="caret" aria-hidden="true">▾</span>` +
-    `<span class="path" title="${path}">${path}</span>` +
-    `<span class="meta">` +
-    `<span class="lang">${lang}</span>` +
-    `<span class="adds">+${adds}</span>` +
-    `<span class="dels">-${dels}</span>` +
-    `</span>` +
-    `</header>`;
 
   // `.file-rows` is a positioning container for the inner rows. Its content
   // box starts at `fileTop + 72` in absolute coords (file-header occupies
@@ -176,39 +171,72 @@ function renderSection(
   const rowsOriginAbs = fileTop + ROW_HEIGHTS["file-header"];
   const rowsHeight = Math.max(0, fileHeight - ROW_HEIGHTS["file-header"]);
 
-  const rowsHtml = renderInnerRows(
-    ctx,
-    summary,
-    fileIndex,
-    rowStart,
-    rowEnd,
-    lastRow,
-    rowsOriginAbs,
-    visibleByFile,
-  );
-
   return (
-    `<section id="f-${fileId}" data-file="${fileId}" data-fi="${fileIndex}" ` +
-    `class="file-section" style="top:${fileTop}px;height:${fileHeight}px">` +
-    headerHtml +
-    `<div class="file-rows" style="height:${rowsHeight}px">${rowsHtml}</div>` +
-    `</section>`
+    <section
+      id={`f-${fileId}`}
+      data-file={fileId}
+      data-fi={fileIndex}
+      class="file-section"
+      style={`top:${fileTop}px;height:${fileHeight}px`}
+    >
+      <FileCardHeader summary={summary} />
+      <div class="file-rows" style={`height:${rowsHeight}px`}>
+        <InnerRows
+          ctx={ctx}
+          summary={summary}
+          fileIndex={fileIndex}
+          rowStart={rowStart}
+          rowEnd={rowEnd}
+          lastRow={lastRow}
+          rowsOriginAbs={rowsOriginAbs}
+          visibleByFile={visibleByFile}
+        />
+      </div>
+    </section>
   );
 }
 
-function renderInnerRows(
-  ctx: FilesContext,
-  summary: DiffFileSummary,
-  fileIndex: number,
-  rowStart: number,
-  rowEnd: number,
-  lastRow: number,
-  rowsOriginAbs: number,
-  visibleByFile: Map<FileId, { minLine: number; maxLine: number }>,
-): string {
+// Jump targeting lives on the server's `jumpToPx` signal rather than a
+// `data-anchor` attribute; the body-level data-effect reads the signal
+// and calls scrollTo with the exact pixel. Robust to the target
+// section's content-visibility:auto skipping its subtree's layout, and
+// to Safari's inconsistent scrollIntoView behaviour on sticky elements.
+function FileCardHeader(props: { summary: DiffFileSummary }) {
+  const { summary } = props;
+  return (
+    <header class="file-card-header">
+      <span class="caret" aria-hidden="true">
+        ▾
+      </span>
+      <span class="path" title={summary.path}>
+        {summary.path}
+      </span>
+      <span class="meta">
+        <span class="lang">{summary.language}</span>
+        <span class="adds">+{summary.additions ?? 0}</span>
+        <span class="dels">-{summary.deletions ?? 0}</span>
+      </span>
+    </header>
+  );
+}
+
+interface InnerRowsProps {
+  ctx: FilesContext;
+  summary: DiffFileSummary;
+  fileIndex: number;
+  rowStart: number;
+  rowEnd: number;
+  lastRow: number;
+  rowsOriginAbs: number;
+  visibleByFile: Map<FileId, { minLine: number; maxLine: number }>;
+}
+
+function InnerRows(props: InnerRowsProps) {
+  const { ctx, summary, fileIndex, rowStart, rowEnd, lastRow, rowsOriginAbs, visibleByFile } =
+    props;
   const layout = ctx.layout;
-  if (rowStart > rowEnd) return "";
-  const out: string[] = [];
+  if (rowStart > rowEnd) return null;
+  const out: (JsxNode | null)[] = [];
   for (let i = rowStart; i <= rowEnd; i++) {
     // Defensive — the file-window slice can extend across file boundaries
     // when overscan crosses them; skip rows that don't belong to this file.
@@ -223,31 +251,49 @@ function renderInnerRows(
         if (li > range.maxLine) range.maxLine = li;
       }
     }
-    out.push(renderInnerRow(layout.describe(i), ctx, summary, i === lastRow, rowsOriginAbs));
+    out.push(
+      <Row
+        desc={layout.describe(i)}
+        ctx={ctx}
+        summary={summary}
+        lastInFile={i === lastRow}
+        rowsOriginAbs={rowsOriginAbs}
+      />,
+    );
   }
-  return out.join("");
+  return <>{out}</>;
 }
 
-function renderInnerRow(
-  desc: RowDescriptor,
-  ctx: FilesContext,
-  summary: DiffFileSummary,
-  lastInFile: boolean,
-  rowsOriginAbs: number,
-): string {
+interface RowProps {
+  desc: RowDescriptor;
+  ctx: FilesContext;
+  summary: DiffFileSummary;
+  lastInFile: boolean;
+  rowsOriginAbs: number;
+}
+
+// Position relative to `.file-rows` so the section subtree is stable
+// across scrolls (the row's `top` doesn't depend on scrollTop).
+function Row(props: RowProps) {
+  const { desc, ctx, summary, lastInFile, rowsOriginAbs } = props;
   const fileId = summary.id;
-  // Position relative to `.file-rows` so the section subtree is stable
-  // across scrolls (the row's `top` doesn't depend on scrollTop).
   const relTop = desc.pixelTop - rowsOriginAbs;
-  const lastAttr = lastInFile ? ' data-last-in-file=""' : "";
   const rowId = `r-${desc.rowIndex}`;
+  const lastInFileAttr = lastInFile ? "" : undefined;
 
   if (desc.kind === "hunk-header") {
     return (
-      `<div id="${rowId}" data-row="${desc.rowIndex}" data-file="${fileId}" data-hunk="${desc.hunkIndex}"${lastAttr} ` +
-      `class="row hunk-header" style="top:${relTop}px">` +
-      `<span class="hunk-label">@@ hunk ${desc.hunkIndex + 1} @@</span>` +
-      `</div>`
+      <div
+        id={rowId}
+        data-row={desc.rowIndex}
+        data-file={fileId}
+        data-hunk={desc.hunkIndex}
+        data-last-in-file={lastInFileAttr}
+        class="row hunk-header"
+        style={`top:${relTop}px`}
+      >
+        <span class="hunk-label">@@ hunk {desc.hunkIndex + 1} @@</span>
+      </div>
     );
   }
 
@@ -260,34 +306,41 @@ function renderInnerRow(
     // their token information in the same fat morph, so the wire-byte
     // comparison between the two is apples-to-apples.
     const ranges = ctx.highlight === "ranges";
-    const text = ranges ? escapeHtml(rawText) : renderTokenizedLine(rawText, spans);
-    const tkAttr = ranges ? renderTokenRanges(rawText, spans) : "";
-    const oldNo = desc.oldLineNo ?? "";
-    const newNo = desc.newLineNo ?? "";
-    const lang = escapeHtml(summary.language);
     const marker = desc.lineKind === "add" ? "+" : desc.lineKind === "del" ? "-" : " ";
     return (
-      `<div id="${rowId}" data-row="${desc.rowIndex}" data-file="${fileId}" data-line="${desc.lineIndex}" ` +
-      `data-lang="${lang}"${lastAttr}${tkAttr} class="row line ${desc.lineKind}" style="top:${relTop}px">` +
-      `<span class="ln old">${oldNo}</span>` +
-      `<span class="ln new">${newNo}</span>` +
-      `<span class="marker" aria-hidden="true">${marker}</span>` +
-      `<span class="text">${text}</span>` +
-      `</div>`
+      <div
+        id={rowId}
+        data-row={desc.rowIndex}
+        data-file={fileId}
+        data-line={desc.lineIndex}
+        data-lang={summary.language}
+        data-last-in-file={lastInFileAttr}
+        data-tk={ranges ? tokenRanges(rawText, spans) : undefined}
+        class={`row line ${desc.lineKind}`}
+        style={`top:${relTop}px`}
+      >
+        <span class="ln old">{desc.oldLineNo ?? ""}</span>
+        <span class="ln new">{desc.newLineNo ?? ""}</span>
+        <span class="marker" aria-hidden="true">
+          {marker}
+        </span>
+        <span class="text">{ranges ? rawText : <TokenLine text={rawText} spans={spans} />}</span>
+      </div>
     );
   }
 
   // file-header rows belong to the section's <header>, not `.file-rows`.
-  return "";
+  return null;
 }
 
-// Emits a line of source as alternating plain text + `<span class="...">`-
-// wrapped token chunks. Sorted-by-start spans let us walk in one pass.
-// Each span's text is HTML-escaped just like the plain runs between them
-// so user-provided content can't break out of the row.
-function renderTokenizedLine(text: string, spans: readonly LineSpan[]): string {
-  if (spans.length === 0) return escapeHtml(text);
-  const parts: string[] = [];
+// A line of source as alternating plain text + token-span chunks.
+// Sorted-by-start spans let us walk in one pass. The runtime escapes both
+// the plain runs and the token text, so user-provided content can't break
+// out of the row.
+function TokenLine(props: { text: string; spans: readonly LineSpan[] }) {
+  const { text, spans } = props;
+  if (spans.length === 0) return <>{text}</>;
+  const parts: (string | JsxNode)[] = [];
   let pos = 0;
   for (let i = 0; i < spans.length; i++) {
     const span = spans[i];
@@ -298,32 +351,32 @@ function renderTokenizedLine(text: string, spans: readonly LineSpan[]): string {
     const start = span.start < pos ? pos : span.start;
     const end = span.end > text.length ? text.length : span.end;
     if (end <= start) continue;
-    if (start > pos) parts.push(escapeHtml(text.slice(pos, start)));
-    parts.push(`<span class="${span.cls}">${escapeHtml(text.slice(start, end))}</span>`);
+    if (start > pos) parts.push(text.slice(pos, start));
+    parts.push(<span class={span.cls}>{text.slice(start, end)}</span>);
     pos = end;
   }
-  if (pos < text.length) parts.push(escapeHtml(text.slice(pos)));
-  return parts.join("");
+  if (pos < text.length) parts.push(text.slice(pos));
+  return <>{parts}</>;
 }
 
-// "ranges" mode counterpart to `renderTokenizedLine`. Emits the row's
-// token offsets as ` data-tk="start,len,k|start,len,k"`, where `k` indexes
+// "ranges" mode counterpart to `TokenLine`. Computes the row's token
+// offsets as `start,len,k|start,len,k`, where `k` indexes
 // TOKEN_CLASS_ORDER. Offsets are UTF-16 code units into the *raw* line —
 // which is exactly what the browser's text node contains once the escaped
 // entities are parsed back, so the client can build Ranges against it
 // without any re-mapping.
 //
-// Returns "" (no attribute) for a line with no tokens.
-function renderTokenRanges(text: string, spans: readonly LineSpan[]): string {
-  if (spans.length === 0) return "";
+// Returns undefined (no attribute) for a line with no tokens.
+function tokenRanges(text: string, spans: readonly LineSpan[]): string | undefined {
+  if (spans.length === 0) return undefined;
   const parts: string[] = [];
   let pos = 0;
   for (let i = 0; i < spans.length; i++) {
     const span = spans[i];
     if (span === undefined) continue;
-    // Same clamping as renderTokenizedLine so both modes highlight
-    // byte-for-byte the same regions — otherwise the comparison is
-    // measuring two different amounts of work.
+    // Same clamping as TokenLine so both modes highlight byte-for-byte the
+    // same regions — otherwise the comparison is measuring two different
+    // amounts of work.
     if (span.end <= pos) continue;
     const start = span.start < pos ? pos : span.start;
     const end = span.end > text.length ? text.length : span.end;
@@ -333,18 +386,6 @@ function renderTokenRanges(text: string, spans: readonly LineSpan[]): string {
     parts.push(`${start},${end - start},${k}`);
     pos = end;
   }
-  if (parts.length === 0) return "";
-  return ` data-tk="${parts.join("|")}"`;
-}
-
-const ESC: Record<string, string> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-  '"': "&quot;",
-  "'": "&#39;",
-};
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ESC[c] ?? c);
+  if (parts.length === 0) return undefined;
+  return parts.join("|");
 }

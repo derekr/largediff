@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { generateDiff } from "../diff/generator.ts";
 import { LayoutBuilder, ROW_HEIGHTS } from "../diff/layout.ts";
-import { INLINE_FILE_ROW_LIMIT, type LineSpan, renderFiles } from "./files.ts";
+import { INLINE_FILE_ROW_LIMIT, type LineSpan, renderFiles } from "./files.tsx";
 
 const NO_SPANS: readonly LineSpan[] = [];
 const tokensForLine = (): readonly LineSpan[] => NO_SPANS;

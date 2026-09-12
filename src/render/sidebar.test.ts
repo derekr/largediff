@@ -5,7 +5,7 @@ import {
   renderSidebarShell,
   renderSidebarWindow,
   SIDEBAR_ROW_HEIGHT_PX,
-} from "./sidebar.ts";
+} from "./sidebar.tsx";
 
 function files(): DiffFileSummary[] {
   return [
