@@ -103,6 +103,8 @@ On a session URL (`/sessions/:sid?…`):
 
 - `?hl=spans|ranges` — select the syntax-highlight delivery mode for the
   session (per-token spans, the default, vs CSS Custom Highlight ranges).
+  A third mode built on microlighter was measured (same wall, plus a tab
+  deadlock in STP 27) and parked in `../css-highlight-lab`.
 - `?trace=1` — install a pass-through tap on the SSE reader; exposes
   `window.__trace` (per-event arrival times, byte counts, errors).
 - `?poke=on` — enable the WebKit flush poke: a tiny POST after each applied

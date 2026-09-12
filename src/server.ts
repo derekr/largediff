@@ -302,18 +302,6 @@ async function handleViewCommand(req: Request, sid: SessionId): Promise<Response
   return new Response(null, { status: 204 });
 }
 
-// Allow-lists for the vendored microlighter spike files (module scope —
-// allocating them per request would be silly).
-const MICRO_FILES = new Set(["highlight.js", "grammar-dependencies.js", "github.css"]);
-const MICRO_GRAMMARS = new Set([
-  "typescript.js",
-  "javascript.js",
-  "python.js",
-  "go.js",
-  "rust.js",
-  "json.js",
-]);
-
 const server = Bun.serve({
   port,
   // SSE streams stay open for the life of the session — disable Bun's 10s
@@ -357,13 +345,13 @@ const server = Bun.serve({
         // limiting alone wouldn't slow a crawler that follows its redirects.
         const limited = limitCommand(req);
         if (limited) return limited;
-        // `?hl=spans|ranges|micro` selects the syntax-highlight delivery mode
-        // for the session and sticks. Lets a reader (or a measurement agent)
+        // `?hl=spans|ranges` selects the syntax-highlight delivery mode for
+        // the session and sticks. Lets a reader (or a measurement agent)
         // A/B the CSS Custom Highlight API against per-token spans on the
         // same seed without touching the settings UI. Anything else is
         // ignored — the session keeps its current mode.
         const hl = new URL(req.url).searchParams.get("hl");
-        if (hl === "spans" || hl === "ranges" || hl === "micro") session.settings.highlight = hl;
+        if (hl === "spans" || hl === "ranges") session.settings.highlight = hl;
         const layout = engine.layout(session.seed);
         const meta = engine.meta(session.seed);
         const initial = renderInitialPaint(session, projectionDeps);
@@ -613,44 +601,6 @@ const server = Bun.serve({
         headers: {
           "content-type": "font/woff2",
           "cache-control": "public, max-age=31536000, immutable",
-          "x-content-type-options": "nosniff",
-        },
-      });
-    },
-
-    // Vendored microlighter spike files (see vendor/micro/README.md).
-    // `highlight.js` is the programmatic `highlightAll` entry (NOT the
-    // auto-run `microlighter.min.js`, which only scans `pre > code` on load).
-    // Grammars arrive via relative `./grammars/*.js` dynamic imports inside
-    // the bundle, so the on-disk layout mirrors upstream `dist/`. Both
-    // routes allow-list exact filenames — a bare param into Bun.file would
-    // be a traversal (and `:file` only matches one segment anyway, so the
-    // grammars get their own route).
-    "/static/micro/grammars/:grammar": (req) => {
-      const grammar = req.params.grammar;
-      if (grammar === undefined || !MICRO_GRAMMARS.has(grammar)) {
-        return new Response("not found", { status: 404 });
-      }
-      return new Response(Bun.file(`vendor/micro/grammars/${grammar}`), {
-        headers: {
-          "content-type": "application/javascript; charset=utf-8",
-          "cache-control": "no-store",
-          "x-content-type-options": "nosniff",
-        },
-      });
-    },
-
-    "/static/micro/:file": (req) => {
-      const file = req.params.file;
-      if (file === undefined || !MICRO_FILES.has(file)) {
-        return new Response("not found", { status: 404 });
-      }
-      const contentType =
-        file === "github.css" ? "text/css; charset=utf-8" : "application/javascript; charset=utf-8";
-      return new Response(Bun.file(`vendor/micro/${file}`), {
-        headers: {
-          "content-type": contentType,
-          "cache-control": "no-store",
           "x-content-type-options": "nosniff",
         },
       });

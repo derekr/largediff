@@ -17,7 +17,7 @@
 // Frozen order — must match TOKEN_CLASS_ORDER in src/render/files.ts.
 const REGISTRY_NAMES = ["kw", "str", "cmt", "num", "fn", "typ"] as const;
 
-export interface HighlightBuildSample {
+interface HighlightBuildSample {
   // Rows carrying a data-tk attribute at build time.
   rows: number;
   // Total Range objects constructed across all six registry entries.
@@ -27,9 +27,6 @@ export interface HighlightBuildSample {
   // ms spent in the CSS.highlights.set() calls themselves. Cheap in both
   // engines — the real WebKit cost lands in the subsequent paint, not here.
   setMs: number;
-  // Micro mode only: ms from registration to the second painted frame.
-  // Measures the repaint storm taped to the Highlight API on WebKit.
-  paintMs?: number;
 }
 
 // TypeScript's lib.dom.d.ts declares `HighlightRegistry` and `Highlight`
@@ -49,7 +46,7 @@ declare global {
   interface Window {
     __ldHl?: {
       supported: boolean;
-      mode: "ranges" | "spans" | "micro";
+      mode: "ranges" | "spans";
       builds: HighlightBuildSample[];
       rebuild: () => HighlightBuildSample | undefined;
     };

@@ -256,16 +256,12 @@ function renderInnerRow(
     const spans = ctx.tokensForLine(fileId, desc.lineIndex);
     // "ranges" mode ships the line as a single plain text node plus a
     // compact offset list; the client turns those into Ranges and hands
-    // them to CSS.highlights. "micro" mode (spike largediff-3s9i) also ships
-    // plain text but no offsets — the client tokenizes with microlighter
-    // itself — plus a `language-*` class microlighter reads. "spans" mode
-    // inlines the markup. All three carry their token information in the
-    // same fat morph, so the wire-byte comparison between them is
-    // apples-to-apples (modulo the offset/class attributes).
-    const plain = ctx.highlight === "ranges" || ctx.highlight === "micro";
-    const text = plain ? escapeHtml(rawText) : renderTokenizedLine(rawText, spans);
-    const tkAttr = ctx.highlight === "ranges" ? renderTokenRanges(rawText, spans) : "";
-    const microClass = ctx.highlight === "micro" ? ` language-${summary.language}` : "";
+    // them to CSS.highlights. "spans" mode inlines the markup. Both carry
+    // their token information in the same fat morph, so the wire-byte
+    // comparison between the two is apples-to-apples.
+    const ranges = ctx.highlight === "ranges";
+    const text = ranges ? escapeHtml(rawText) : renderTokenizedLine(rawText, spans);
+    const tkAttr = ranges ? renderTokenRanges(rawText, spans) : "";
     const oldNo = desc.oldLineNo ?? "";
     const newNo = desc.newLineNo ?? "";
     const lang = escapeHtml(summary.language);
@@ -276,7 +272,7 @@ function renderInnerRow(
       `<span class="ln old">${oldNo}</span>` +
       `<span class="ln new">${newNo}</span>` +
       `<span class="marker" aria-hidden="true">${marker}</span>` +
-      `<span class="text${microClass}">${text}</span>` +
+      `<span class="text">${text}</span>` +
       `</div>`
     );
   }
