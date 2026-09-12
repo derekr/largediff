@@ -27,6 +27,9 @@ export interface HighlightBuildSample {
   // ms spent in the CSS.highlights.set() calls themselves. Cheap in both
   // engines — the real WebKit cost lands in the subsequent paint, not here.
   setMs: number;
+  // Micro mode only: ms from registration to the second painted frame.
+  // Measures the repaint storm taped to the Highlight API on WebKit.
+  paintMs?: number;
 }
 
 // TypeScript's lib.dom.d.ts declares `HighlightRegistry` and `Highlight`
@@ -46,7 +49,7 @@ declare global {
   interface Window {
     __ldHl?: {
       supported: boolean;
-      mode: "ranges" | "spans";
+      mode: "ranges" | "spans" | "micro";
       builds: HighlightBuildSample[];
       rebuild: () => HighlightBuildSample | undefined;
     };

@@ -14,11 +14,14 @@ export type Chrome = "github" | "bleed";
 //   "spans"  — each token is a `<span class="kw">…</span>` in the morph payload.
 //   "ranges" — rows carry plain text plus a compact `data-tk` offset list;
 //              the client builds Ranges and feeds `CSS.highlights`.
+//   "micro"  — spike (largediff-3s9i): rows carry plain text plus a
+//              `language-*` class; the client tokenizes with microlighter's
+//              TextMate grammars and feeds `CSS.highlights` itself.
 // "spans" is the production default (see the CSS Custom Highlight API note
 // in CLAUDE.md). "ranges" is kept as a runtime-selectable mode so the
 // Safari paint cost stays reproducible instead of being folklore —
 // `?hl=ranges` on a session URL, or POST /settings {"highlight":"ranges"}.
-export type HighlightMode = "spans" | "ranges";
+export type HighlightMode = "spans" | "ranges" | "micro";
 
 export interface ViewState {
   scrollTop: number;

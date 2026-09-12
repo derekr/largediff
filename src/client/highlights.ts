@@ -16,6 +16,7 @@
 
 import "./sidebar.ts";
 import { setupMeasure } from "./measure.ts";
+import { setupMicroHighlights } from "./micro.ts";
 import "./poke.ts";
 import { setupRangeHighlights } from "./ranges.ts";
 
@@ -142,6 +143,15 @@ if (document.readyState === "loading") {
   setupRangeHighlights();
 }
 
+// `?hl=micro` mode (spike largediff-3s9i): tokenize rows with microlighter
+// and install the ranges into CSS.highlights. Same bail-out contract as
+// ranges mode — other modes pay nothing for it.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupMicroHighlights);
+} else {
+  setupMicroHighlights();
+}
+
 // `window.__ldMeasure()` — scriptable jump-sequence harness used to compare
-// the two highlight modes. Registering it is free; it only runs when called.
+// the highlight modes. Registering it is free; it only runs when called.
 setupMeasure();

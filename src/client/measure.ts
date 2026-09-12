@@ -70,7 +70,7 @@ interface JumpSample {
 }
 
 interface Report {
-  mode: "spans" | "ranges";
+  mode: "spans" | "ranges" | "micro";
   ua: string;
   highlightApiSupported: boolean;
   // Raw text of the topbar's brotli chip title, e.g.

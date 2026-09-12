@@ -33,7 +33,7 @@ function asChrome(v: unknown): Chrome | undefined {
 }
 
 function asHighlight(v: unknown): HighlightMode | undefined {
-  return v === "spans" || v === "ranges" ? v : undefined;
+  return v === "spans" || v === "ranges" || v === "micro" ? v : undefined;
 }
 
 function asObject(v: unknown): Record<string, unknown> | undefined {
