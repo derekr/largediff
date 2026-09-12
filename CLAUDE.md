@@ -75,13 +75,14 @@ If it fails, run `bun run fmt` to auto-fix formatting and re-run check.
 src/
 ├── server.ts         entry: Bun.serve route table
 ├── server/           SSE writer + per-session compression
-├── session/          ReviewSession model, commands, projection, stream attach
+├── session/          ReviewSession model, commands, projection, stream attach,
+│                    view-push throttle
 ├── diff/             synthetic diff generator, snippets, row layout
 ├── store/            shared diff types + SessionStore
 ├── highlight/        regex-based per-language tokenizer
 ├── render/           HTML fragment builders (shell, files, sidebar, /doc)
 └── client/           browser modules (highlights.ts, styles.css, …)
-vendor/               datastar-1.0.3.js (vendored Datastar bundle, no CDN)
+vendor/               datastar bundle + OFL fonts (no CDN anywhere)
 .beans/               issue tracker (beans CLI)
 .claude/              project-shared Claude Code config + hooks
 ```

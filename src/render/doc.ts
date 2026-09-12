@@ -3,66 +3,110 @@
 // assets to wrangle, no client JS to ship.
 
 export function renderDoc(): string {
+  const today = new Date().toISOString().slice(0, 10);
   return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <title>largediff · architecture brief</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!--
-      Preload the latin-subset woff2 files for each family directly so the
-      browser doesn't have to wait until the Google Fonts CSS arrives and
-      parses to discover them. These are versioned URLs (v24, v26 today);
-      when Google bumps the version the preload will 404 but the actual
-      font load still works via the stylesheet path below — so the worst
-      case is a wasted preload request, never a visual regression.
+      Vendored type (vendor/fonts/, OFL-licensed) — no font CDN. Preload
+      the latin woff2 files directly; filenames pin the upstream version,
+      served immutable from /static/fonts.
     -->
     <link
       rel="preload"
       as="font"
       type="font/woff2"
       crossorigin
-      href="https://fonts.gstatic.com/s/newsreader/v26/cY9AfjOCX1hbuyalUrK4397yjIJFJpc.woff2"
+      href="/static/fonts/v20-ibm-plex-mono-400-latin.woff2"
     />
     <link
       rel="preload"
       as="font"
       type="font/woff2"
       crossorigin
-      href="https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2"
+      href="/static/fonts/v20-ibm-plex-mono-500-latin.woff2"
     />
-    <!-- And kick off the CSS fetch early too. -->
     <link
       rel="preload"
-      as="style"
-      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500&display=swap"
-    />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500&display=swap"
-      rel="stylesheet"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href="/static/fonts/v6-silkscreen-400-latin.woff2"
     />
     <style>
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("/static/fonts/v20-ibm-plex-mono-400-latin.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "IBM Plex Mono";
+        font-style: normal;
+        font-weight: 500;
+        font-display: swap;
+        src: url("/static/fonts/v20-ibm-plex-mono-500-latin.woff2") format("woff2");
+      }
+      @font-face {
+        font-family: "Silkscreen";
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url("/static/fonts/v6-silkscreen-400-latin.woff2") format("woff2");
+      }
       :root {
-        --bg: #0d1117;
-        --panel: #11161d;
-        --elevated: #161b22;
-        --rule: #21262d;
-        --rule-strong: #30363d;
-        --fg: #e6edf3;
-        --fg-strong: #f5f8fb;
-        --muted: #8b949e;
-        --muted-dim: #5b626c;
-        --accent: #ffd86e;
-        --accent-dim: #b59c4f;
-        --accent-soft: rgba(255, 216, 110, 0.12);
-        --add: #3fb950;
-        --del: #f85149;
-        --serif: "Newsreader", Charter, "Iowan Old Style", "Cambria",
+        color-scheme: light dark;
+        --bg: #f3f1e3;
+        --panel: #ebe7d3;
+        --elevated: #faf8ee;
+        --rule: #d8d3bd;
+        --rule-strong: #b9b294;
+        --fg: #23241c;
+        --fg-strong: #14150e;
+        --muted: #6b6a58;
+        --muted-dim: #8f8d78;
+        --accent: #8a6d1c;
+        --accent-dim: #a68c3f;
+        --accent-soft: rgba(138, 109, 28, 0.12);
+        --add: #1f7a33;
+        --del: #c93a32;
+        --diagram: #e7e3cf;
+        --diagram-2: #dcd7bc;
+        --topbar: rgba(243, 241, 227, 0.85);
+        --code-k: #b3261e;
+        --serif: Charter, "Iowan Old Style", "Palatino Linotype", Palatino,
           Georgia, serif;
-        --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo,
+        --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo,
           monospace;
+        --display: "Silkscreen", "IBM Plex Mono", ui-monospace, monospace;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #181b12;
+          --panel: #20241a;
+          --elevated: #262b1e;
+          --rule: #333829;
+          --rule-strong: #4a5140;
+          --fg: #e8e6d5;
+          --fg-strong: #f5f3e4;
+          --muted: #a3a18a;
+          --muted-dim: #76755f;
+          --accent: #ffd86e;
+          --accent-dim: #b59c4f;
+          --accent-soft: rgba(255, 216, 110, 0.12);
+          --add: #3fb950;
+          --del: #f85149;
+          --diagram: #1a2230;
+          --diagram-2: #1d2632;
+          --topbar: rgba(24, 27, 18, 0.85);
+          --code-k: #ff7b72;
+        }
       }
 
       * {
@@ -106,7 +150,7 @@ export function renderDoc(): string {
         position: sticky;
         top: 0;
         z-index: 20;
-        background: rgba(13, 17, 23, 0.85);
+        background: var(--topbar);
         backdrop-filter: saturate(160%) blur(12px);
         -webkit-backdrop-filter: saturate(160%) blur(12px);
         border-bottom: 1px solid var(--rule);
@@ -127,8 +171,10 @@ export function renderDoc(): string {
         color: var(--muted);
       }
       .topbar .brand strong {
+        font-family: var(--display);
+        font-size: 15px;
+        font-weight: 400;
         color: var(--fg-strong);
-        font-weight: 500;
       }
       .topbar .links {
         display: flex;
@@ -241,24 +287,26 @@ export function renderDoc(): string {
         margin-bottom: 32px;
       }
       .hero h1 {
-        font-family: var(--serif);
-        font-size: clamp(48px, 7.6vw, 96px);
-        font-weight: 500;
-        line-height: 0.98;
-        letter-spacing: -0.025em;
+        font-family: var(--display);
+        font-size: clamp(30px, 4.6vw, 58px);
+        font-weight: 400;
+        line-height: 1.25;
+        letter-spacing: 0;
         margin: 0 0 36px 0;
         color: var(--fg-strong);
         text-wrap: balance;
-        font-feature-settings:
-          "ss01",
-          "kern",
-          "liga",
-          "dlig";
       }
       .hero h1 em {
-        font-style: italic;
+        font-style: normal;
         color: var(--accent);
-        font-weight: 500;
+        font-weight: 400;
+      }
+      .hero .status-line {
+        font-family: var(--mono);
+        font-size: 12.5px;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+        margin: 0 0 32px 0;
       }
       .hero .subhead {
         font-size: 22px;
@@ -384,7 +432,7 @@ export function renderDoc(): string {
         stroke: none;
       }
       .rendered-row {
-        fill: #1a2230;
+        fill: var(--diagram);
         stroke: var(--rule-strong);
         stroke-width: 0.75;
       }
@@ -397,7 +445,7 @@ export function renderDoc(): string {
         stroke: rgba(248, 81, 73, 0.35);
       }
       .rendered-row.file-card {
-        fill: #1d2632;
+        fill: var(--diagram-2);
         stroke: var(--rule-strong);
       }
       .row-text {
@@ -654,7 +702,7 @@ export function renderDoc(): string {
         color: var(--muted);
       }
       .codeblock .k {
-        color: #ff7b72;
+        color: var(--code-k);
       }
       .codeblock .s {
         color: var(--accent);
@@ -727,6 +775,7 @@ export function renderDoc(): string {
       <section class="hero">
         <div class="wide-col">
           <p class="eyebrow">An architecture brief · 2026</p>
+          <p class="status-line">SYS.STATUS: ONLINE &nbsp;|&nbsp; ${today}</p>
           <h1>
             Reviewing a diff <em>the size&nbsp;of a small&nbsp;city.</em>
           </h1>
@@ -831,10 +880,10 @@ export function renderDoc(): string {
                   <rect x="412" y="60" width="120" height="440" rx="4" />
                 </clipPath>
                 <linearGradient id="tape-fade" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stop-color="#0d1117" stop-opacity="1" />
-                  <stop offset="12%" stop-color="#0d1117" stop-opacity="0" />
-                  <stop offset="88%" stop-color="#0d1117" stop-opacity="0" />
-                  <stop offset="100%" stop-color="#0d1117" stop-opacity="1" />
+                  <stop offset="0%" style="stop-color:var(--bg)" stop-opacity="1" />
+                  <stop offset="12%" style="stop-color:var(--bg)" stop-opacity="0" />
+                  <stop offset="88%" style="stop-color:var(--bg)" stop-opacity="0" />
+                  <stop offset="100%" style="stop-color:var(--bg)" stop-opacity="1" />
                 </linearGradient>
               </defs>
 

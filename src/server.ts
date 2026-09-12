@@ -26,6 +26,13 @@ import {
 } from "./session/projection.ts";
 import { attachStream } from "./session/stream.ts";
 import type { ReviewSession, SessionId } from "./session/types.ts";
+import {
+  beginCoalesce,
+  cancelPendingViewPush,
+  dropViewPushState,
+  isEchoScroll,
+  scheduleViewPush,
+} from "./session/viewpush.ts";
 import { type SessionStore, SqliteSessionStore } from "./store/sessions.ts";
 
 const port = Number(process.env.PORT ?? 3000);
@@ -121,10 +128,7 @@ const projectionDeps: ProjectionDeps = { writers, engine, metrics };
 // Drop everything this module holds for a session that has left the store.
 // Called by the store's onEvict hook (sweep + DELETE route).
 function evictSessionSideState(sid: SessionId): void {
-  const state = viewPushState.get(sid);
-  if (state?.trailingTimer !== undefined) clearTimeout(state.trailingTimer);
-  viewPushState.delete(sid);
-  coalesceUntil.delete(sid);
+  dropViewPushState(sid);
   // Flush the live writer's byte counters into the metrics BEFORE the
   // registry closes it — after detach the totals are unreachable and the
   // session-end line would under-report bytes served.
@@ -238,117 +242,6 @@ function doJump(session: ReviewSession, fid: string | undefined): Response {
   return new Response(null, { status: 204 });
 }
 
-// Throttle /view-driven pushes (leading + trailing) so the SSE stream gets
-// a steady cadence of fresh windows during a scroll instead of a flood. A
-// pure debounce was wrong: during a continuous fling the timer kept getting
-// reset and no push fired until the user stopped, leaving the rendered
-// window stale and the viewport blank past overscan. Throttle keeps the
-// first /view's push immediate (no lag on a small scroll), rate-limits
-// subsequent pushes to one per `THROTTLE_MS`, and schedules a trailing
-// push so the final state isn't lost when the user halts.
-const VIEW_THROTTLE_MS = 40;
-
-// Quiet window after a command-driven push, during which /view pushes are
-// forced onto the trailing edge instead of firing immediately.
-//
-// A jump moves the scroller, and that scroll fires /view, which produces a
-// SECOND projection push a few tens of milliseconds after the jump's own.
-// The client is left in the same place either way — the jump already
-// rendered the window it asked for — but the two writes land back-to-back
-// on the SSE stream, and that is exactly the shape that makes Safari's
-// decompressor withhold a fragment until the next write arrives. Measured:
-// two writes per trigger tail to a full inter-write interval, one write per
-// trigger stays under 14ms. See largediff-pkrf.
-//
-// 250ms comfortably covers the echo scroll (instant scrollTo, so the events
-// land within ~100ms) without making a real scroll after a jump feel lagged.
-const PUSH_COALESCE_MS = 250;
-const coalesceUntil = new Map<SessionId, number>();
-
-// A jump's own scrollTo lands the scroller on the pixel the jump already
-// set, so the /view it fires reports a position the server chose and
-// carries no information. Merging it into a trailing push was not enough —
-// merged or not, it is still a SECOND write on the stream, which is the
-// shape that trips Safari's decompressor. So inside the quiet window a
-// /view that has not actually moved is dropped outright.
-//
-// The tolerance is sub-row on purpose: a genuine fling during the window
-// moves far more than this and still gets through.
-const ECHO_TOLERANCE_PX = 4;
-
-function isEchoScroll(session: ReviewSession, body: unknown): boolean {
-  if ((coalesceUntil.get(session.id) ?? 0) <= Date.now()) return false;
-  if (body === null || typeof body !== "object") return false;
-  const reported = (body as { scrollTop?: unknown }).scrollTop;
-  if (typeof reported !== "number" || !Number.isFinite(reported)) return false;
-  return Math.abs(reported - session.view.scrollTop) <= ECHO_TOLERANCE_PX;
-}
-
-// Called after any command-driven push. Everything /view produces for the
-// next PUSH_COALESCE_MS is merged into a single trailing push.
-function beginCoalesce(sid: SessionId): void {
-  coalesceUntil.set(sid, Date.now() + PUSH_COALESCE_MS);
-}
-interface ViewPushState {
-  lastPushAt: number;
-  trailingTimer?: ReturnType<typeof setTimeout>;
-}
-const viewPushState = new Map<SessionId, ViewPushState>();
-
-function scheduleViewPush(session: ReviewSession): void {
-  const now = Date.now();
-  const state = viewPushState.get(session.id) ?? { lastPushAt: 0 };
-  const since = now - state.lastPushAt;
-  // Inside the quiet window after a command push, never take the leading
-  // edge — coalesce into the trailing push so the command and its echo
-  // scroll produce one write rather than two.
-  const quiet = (coalesceUntil.get(session.id) ?? 0) > now;
-  if (!quiet && since >= VIEW_THROTTLE_MS) {
-    // Outside the window — push immediately, reset counter.
-    metrics.count("view_leading");
-    state.lastPushAt = now;
-    if (state.trailingTimer !== undefined) {
-      clearTimeout(state.trailingTimer);
-      state.trailingTimer = undefined;
-    }
-    viewPushState.set(session.id, state);
-    pushProjection(session, projectionDeps);
-    return;
-  }
-  // Inside the window — schedule (or refresh) the trailing-edge push so
-  // the latest state lands after the throttle elapses. deferred vs
-  // trailing_fired is the coalescing ratio: many deferred collapsing into
-  // few fired means the throttle is absorbing a chatty client, not that
-  // the server is slow.
-  metrics.count("view_deferred");
-  if (state.trailingTimer !== undefined) clearTimeout(state.trailingTimer);
-  const delay = quiet
-    ? Math.max(VIEW_THROTTLE_MS, (coalesceUntil.get(session.id) ?? now) - now)
-    : VIEW_THROTTLE_MS - since;
-  state.trailingTimer = setTimeout(() => {
-    const live = sessions.get(session.id);
-    const s = viewPushState.get(session.id);
-    if (s !== undefined) {
-      s.trailingTimer = undefined;
-      s.lastPushAt = Date.now();
-    }
-    if (live !== undefined) {
-      metrics.count("view_trailing_fired");
-      pushProjection(live, projectionDeps);
-    }
-  }, delay);
-  viewPushState.set(session.id, state);
-}
-
-function cancelPendingViewPush(sid: SessionId): void {
-  const state = viewPushState.get(sid);
-  if (state?.trailingTimer !== undefined) {
-    clearTimeout(state.trailingTimer);
-    state.trailingTimer = undefined;
-    viewPushState.set(sid, state);
-  }
-}
-
 async function handleCommand(
   req: Request,
   sid: SessionId,
@@ -401,7 +294,7 @@ async function handleViewCommand(req: Request, sid: SessionId): Promise<Response
   const totalHeight = engine.layout(session.seed).totalHeight;
   if (session.view.scrollTop > totalHeight) session.view.scrollTop = totalHeight;
   sessions.persist(sid);
-  scheduleViewPush(session);
+  scheduleViewPush(session, (s) => pushProjection(s, projectionDeps), metrics);
   // For a deferred /view the projection lands later on the trailing timer;
   // this histogram then measures apply+persist+schedule only. The
   // leading/deferred split in the coalesce counters says which was which.
@@ -688,6 +581,30 @@ const server = Bun.serve({
           "x-content-type-options": "nosniff",
         },
       }),
+
+    // Vendored font files for the /doc brief (both OFL-licensed: IBM Plex
+    // Mono for body/code, Silkscreen for display). Allow-listed by exact
+    // filename — `:file` straight into Bun.file would be a path traversal.
+    // Filenames pin the upstream version (v20/v6), so immutable caching is
+    // honest: a new upstream version arrives under a new name.
+    "/static/fonts/:file": (req) => {
+      const file = req.params.file;
+      if (
+        file === undefined ||
+        (file !== "v20-ibm-plex-mono-400-latin.woff2" &&
+          file !== "v20-ibm-plex-mono-500-latin.woff2" &&
+          file !== "v6-silkscreen-400-latin.woff2")
+      ) {
+        return new Response("not found", { status: 404 });
+      }
+      return new Response(Bun.file(`vendor/fonts/${file}`), {
+        headers: {
+          "content-type": "font/woff2",
+          "cache-control": "public, max-age=31536000, immutable",
+          "x-content-type-options": "nosniff",
+        },
+      });
+    },
 
     // Vendored Datastar bundle (vendor/datastar-1.0.3.js) — was a jsdelivr
     // CDN pin; serving it from here removes the supply-chain

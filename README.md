@@ -52,6 +52,23 @@ bun test
   sessions. The synthetic diff and its token caches are content-addressed by
   `(seed, fileId)` and shared across every session on the same seed.
 
+### Start here
+
+New to the codebase? Read in this order — it follows one scroll event
+through the system:
+
+1. `/doc` (the architecture brief, served by the app) for the pattern
+   vocabulary: projection, command, window, warm stream.
+2. `src/server.ts` — the route table: every URL the browser can touch.
+3. `src/session/stream.ts` — the long-lived SSE stream those pushes ride on.
+4. `src/session/projection.ts` — `pushProjection`, the single function that
+   turns state into wire bytes.
+5. `src/diff/layout.ts` — the flat pixel-offset table that makes windowing
+   O(1) instead of a tree walk.
+6. `src/session/commands.ts` + `src/session/viewpush.ts` — what a scroll
+   POST validates, and how the throttle turns a fling into a steady
+   cadence of pushes.
+
 ## SSE delivery lab
 
 The standalone SSE-delivery harness — built to isolate a WebKit regression
@@ -105,13 +122,14 @@ On a session URL (`/sessions/:sid?…`):
 src/
 ├── server.ts         entry: Bun.serve route table
 ├── server/           SSE writer + per-session compression
-├── session/          ReviewSession model, commands, projection, stream attach
+├── session/          ReviewSession model, commands, projection, stream attach,
+│                    view-push throttle (scroll fling → push cadence)
 ├── diff/             seeded synthetic diff generator, snippet bank, row layout
 ├── highlight/        regex-based per-language tokenizer
 ├── render/           HTML builders: shell, file windows, sidebar, /doc page
 ├── store/            DiffStore (shared, content-addressed) + SessionStore (SQLite)
 └── client/           browser modules: highlights, sidebar, poke, measure, styles
-vendor/               datastar-1.0.3.js — vendored Datastar bundle (no CDN)
+vendor/               datastar bundle + OFL fonts — no CDN anywhere
 .beans/               issue tracker (beans CLI); the engineering notes live here
 .claude/              project-shared Claude Code config + hooks
 ```
