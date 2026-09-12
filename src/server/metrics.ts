@@ -507,6 +507,13 @@ export class Metrics {
         sse: { attach: this.take("sse_attach"), detach: this.take("sse_detach") },
         wire,
         session_lines_dropped: this.take("session_lines_dropped"),
+        // Abuse counters: rate-limited requests and junk-fid jumps are
+        // rejected before doing work, so they show up here and nowhere
+        // else — a flood is visible as a spike in exactly one place.
+        limits: {
+          rate_limited: this.take("rate_limited"),
+          jump_unknown_fid: this.take("jump_unknown_fid"),
+        },
       },
       gauges: {
         ...(this.gauges?.() ?? {}),

@@ -83,6 +83,7 @@ export function attachStream(opts: AttachStreamOptions): Response | null {
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
     "x-accel-buffering": "no",
+    "x-content-type-options": "nosniff",
   };
   // Encoding is decided synchronously inside `start()` above; by the time
   // we reach this Response construction it's safe to inspect.

@@ -9,6 +9,7 @@ import { FILE_HEADER_GAP_PX } from "./diff/layout.ts";
 import { renderDoc } from "./render/doc.ts";
 import { renderShell } from "./render/shell.ts";
 import { type CommandKind, metricsFromEnv } from "./server/metrics.ts";
+import { clientIp, IpRateLimiter, parseBucketSpec } from "./server/ratelimit.ts";
 import {
   applySettings,
   applySidebarView,
@@ -87,6 +88,17 @@ const metrics = metricsFromEnv({
 });
 metrics.start();
 
+// Per-IP rate limits (see src/server/ratelimit.ts for the threat model).
+// Creation is tight: each mint is cheap but the 10k session cap is shared.
+// Commands are generous: a fling posts /view every ~40ms per tab, and NATs
+// share one bucket across many users.
+const trustProxy = process.env.LARGEDIFF_TRUST_PROXY !== "0";
+const limiter = new IpRateLimiter(
+  parseBucketSpec(process.env.LARGEDIFF_RATE_LIMIT_CREATE, { burst: 60, perSecond: 1 }),
+  parseBucketSpec(process.env.LARGEDIFF_RATE_LIMIT_COMMANDS, { burst: 150, perSecond: 60 }),
+);
+limiter.start();
+
 const engine = createDiffEngine({
   defaultLines: 200_000,
   // Skip the instrument entirely when metrics are off so the engine's
@@ -141,6 +153,35 @@ function gone(): Response {
   return new Response("Session not found", { status: 410 });
 }
 
+function requestIp(req: Request): string {
+  // `server` is assigned before the first request arrives; this closure only
+  // runs per request, so the forward reference never touches the TDZ.
+  return clientIp(
+    req.headers.get("x-forwarded-for"),
+    server.requestIP(req)?.address ?? null,
+    trustProxy,
+  );
+}
+
+// 429 for a request over its per-IP budget. Callers check this before any
+// session state is touched so a flood is rejected at constant cost.
+function limitCreate(req: Request): Response | null {
+  return overLimit(limiter.takeCreate(requestIp(req)));
+}
+
+function limitCommand(req: Request): Response | null {
+  return overLimit(limiter.takeCommand(requestIp(req)));
+}
+
+function overLimit(retryAfterSec: number): Response | null {
+  if (retryAfterSec <= 0) return null;
+  metrics.count("rate_limited");
+  return new Response("Rate limited, try again shortly", {
+    status: 429,
+    headers: { "retry-after": String(retryAfterSec) },
+  });
+}
+
 async function parseBody(req: Request): Promise<unknown> {
   try {
     return await req.json();
@@ -157,7 +198,10 @@ function doJump(session: ReviewSession, fid: string | undefined): Response {
   const meta = engine.meta(session.seed);
   const idx = meta.files.findIndex((f) => f.id === fid);
   if (idx < 0) {
-    pushProjection(session, projectionDeps);
+    // Unknown id: no-op WITHOUT a render. A junk fid used to cost a full
+    // window render + encode here, so any anonymous POST could burn ~10ms
+    // of server CPU per request for free.
+    metrics.count("jump_unknown_fid");
     return new Response(null, { status: 204 });
   }
   // Server's scrollTop = file's chrome pixel (row's top + the 32px transparent
@@ -313,6 +357,8 @@ async function handleCommand(
 ): Promise<Response> {
   const session = sessions.get(sid);
   if (session === undefined) return gone();
+  const limited = limitCommand(req);
+  if (limited) return limited;
   metrics.commandReceived(sid, kind);
   // POST received → projection write completed. This is the latency a user
   // actually feels on a click, and it is per-command-type because a slow
@@ -331,6 +377,8 @@ async function handleCommand(
 async function handleViewCommand(req: Request, sid: SessionId): Promise<Response> {
   const session = sessions.get(sid);
   if (session === undefined) return gone();
+  const limited = limitCommand(req);
+  if (limited) return limited;
   metrics.commandReceived(sid, "view");
   const t0 = performance.now();
   const body = await parseBody(req);
@@ -371,7 +419,9 @@ const server = Bun.serve({
   // server CPU on body parsing for free. 16KB leaves generous headroom.
   maxRequestBodySize: 16 * 1024,
   routes: {
-    "/": () => {
+    "/": (req) => {
+      const limited = limitCreate(req);
+      if (limited) return limited;
       if (sessions.size >= MAX_LIVE_SESSIONS) return overCapacity();
       const session = sessions.create(DEFAULT_SEED);
       metrics.sessionCreated(session.id);
@@ -379,7 +429,9 @@ const server = Bun.serve({
     },
 
     "/sessions": {
-      POST: () => {
+      POST: (req) => {
+        const limited = limitCreate(req);
+        if (limited) return limited;
         if (sessions.size >= MAX_LIVE_SESSIONS) return overCapacity();
         const session = sessions.create(DEFAULT_SEED);
         metrics.sessionCreated(session.id);
@@ -395,6 +447,11 @@ const server = Bun.serve({
         // user back to `/` which mints a fresh one. Cheaper than a 410 the
         // user has to interpret, and the bookmark stays usable.
         if (session === undefined) return Response.redirect("/", 302);
+        // Full initial paint is the most expensive GET here (~20ms + cold
+        // tokenize), so page loads draw from the command budget — creation
+        // limiting alone wouldn't slow a crawler that follows its redirects.
+        const limited = limitCommand(req);
+        if (limited) return limited;
         // `?hl=spans|ranges` selects the syntax-highlight delivery mode for
         // the session and sticks. Lets a reader (or a measurement agent)
         // A/B the CSS Custom Highlight API against per-token spans on the
@@ -431,6 +488,7 @@ const server = Bun.serve({
             // off-by-one navigation. Forcing a re-fetch each load keeps
             // users on the current click-handler shape.
             "cache-control": "no-store",
+            "x-content-type-options": "nosniff",
           },
         });
       },
@@ -447,6 +505,10 @@ const server = Bun.serve({
     "/sessions/:sid/stream": {
       GET: (req) => {
         const sid = req.params.sid;
+        // Count the attach before doing the work: the initial push renders
+        // a full window, so a reconnect loop would otherwise render for free.
+        const limited = limitCommand(req);
+        if (limited) return limited;
         const response = attachStream({
           sid,
           request: req,
@@ -500,6 +562,8 @@ const server = Bun.serve({
         const sid = req.params.sid;
         const session = sessions.get(sid);
         if (session === undefined) return gone();
+        const limited = limitCommand(req);
+        if (limited) return limited;
         metrics.commandReceived(sid, "top");
         const t0 = performance.now();
         applyTop(session);
@@ -519,6 +583,8 @@ const server = Bun.serve({
         const sid = req.params.sid;
         const session = sessions.get(sid);
         if (session === undefined) return gone();
+        const limited = limitCommand(req);
+        if (limited) return limited;
         metrics.commandReceived(sid, "jump");
         const t0 = performance.now();
         const res = doJump(session, req.params.fid);
@@ -537,6 +603,8 @@ const server = Bun.serve({
       POST: (req) => {
         const session = sessions.get(req.params.sid);
         if (session === undefined) return gone();
+        const limited = limitCommand(req);
+        if (limited) return limited;
         metrics.commandReceived(req.params.sid, "poke");
         const writer = writers.get(req.params.sid);
         writer?.sendComment?.(".");
@@ -556,6 +624,8 @@ const server = Bun.serve({
         const sid = req.params.sid;
         const session = sessions.get(sid);
         if (session === undefined) return gone();
+        const limited = limitCommand(req);
+        if (limited) return limited;
         metrics.commandReceived(sid, "prewarm");
         // Unknown ids no-op rather than reach `engine.file`, which throws —
         // in dev mode that surfaced a stack-trace error page (absolute
@@ -575,10 +645,26 @@ const server = Bun.serve({
 
     "/doc": () =>
       new Response(renderDoc(), {
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+          "x-content-type-options": "nosniff",
+        },
       }),
 
     "/favicon.ico": () => new Response(null, { status: 204 }),
+
+    // Every crawler, prefetcher, and uptime probe mints a review session via
+    // GET / — unbounded, at line rate. There is no SEO value in a demo whose
+    // pages are per-visit sessions, so disallow everything. (Determined
+    // abuse still hits the per-IP creation bucket.)
+    "/robots.txt": () =>
+      new Response("User-agent: *\nDisallow: /\n", {
+        headers: {
+          "content-type": "text/plain; charset=utf-8",
+          "cache-control": "max-age=86400",
+          "x-content-type-options": "nosniff",
+        },
+      }),
 
     // `no-store` because the asset filenames aren't versioned — without it
     // browsers happily serve a stale CSS/JS from a previous deploy and the
@@ -590,6 +676,7 @@ const server = Bun.serve({
         headers: {
           "content-type": "text/css; charset=utf-8",
           "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
         },
       }),
 
@@ -598,6 +685,20 @@ const server = Bun.serve({
         headers: {
           "content-type": "application/javascript; charset=utf-8",
           "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
+        },
+      }),
+
+    // Vendored Datastar bundle (vendor/datastar-1.0.0.js) — was a jsdelivr
+    // CDN pin; serving it from here removes the supply-chain
+    // script-injection lever entirely. Same no-store + BUILD_ID treatment
+    // as the other static assets.
+    "/static/datastar.js": () =>
+      new Response(Bun.file("vendor/datastar-1.0.0.js"), {
+        headers: {
+          "content-type": "application/javascript; charset=utf-8",
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff",
         },
       }),
   },

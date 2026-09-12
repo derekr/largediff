@@ -23,9 +23,6 @@ import type { InitialPaint } from "../session/projection.ts";
 import type { DiffFileSummary } from "../store/diff.ts";
 import { renderSidebarShell } from "./sidebar.ts";
 
-const DATASTAR_CDN =
-  "https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0/bundles/datastar.js";
-
 // One token per server process. Each deploy spins a new VM, so the token
 // rotates on deploy — any stale HTML that survived a cache will reference
 // asset URLs that don't match the freshly-served pair, forcing a re-fetch
@@ -322,7 +319,7 @@ export function renderShell(
     <link rel="stylesheet" href="/static/styles.css?v=${BUILD_ID}" />
     ${trace ? STREAM_COUNTER_SCRIPT : ""}
     ${trace ? TRACE_SCRIPT : ""}
-    <script type="module" src="${DATASTAR_CDN}"></script>
+    <script type="module" src="/static/datastar.js?v=${BUILD_ID}"></script>
     <script type="module" src="/static/highlights.js?v=${BUILD_ID}"></script>
   </head>
   <body

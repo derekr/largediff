@@ -25,6 +25,7 @@ interface RollupJson {
     push_shape: Record<string, { max: number } | undefined>;
     sse: { attach: number; detach: number };
     wire: Record<string, { in: number; out: number; ratio: number }>;
+    limits: { rate_limited: number; jump_unknown_fid: number };
     session_lines_dropped: number;
   };
   gauges: Record<string, number>;
@@ -171,6 +172,20 @@ describe("Metrics rollup", () => {
     expect(interval.push.emit).toBe(0);
     // Empty histograms are omitted (undefined), never stale.
     expect(interval.push_ms.total).toBeUndefined();
+  });
+
+  test("abuse counters render in their own limits section", () => {
+    const { metrics } = makeMetrics();
+    metrics.count("rate_limited");
+    metrics.count("rate_limited");
+    metrics.count("jump_unknown_fid");
+    const interval = parseRollup(metrics.rollup() ?? "").interval;
+    expect(interval.limits).toEqual({ rate_limited: 2, jump_unknown_fid: 1 });
+    // Deltas: consumed by the rollup above.
+    expect(parseRollup(metrics.rollup() ?? "").interval.limits).toEqual({
+      rate_limited: 0,
+      jump_unknown_fid: 0,
+    });
   });
 
   test("wire bytes are attributed per encoding as interval deltas", () => {

@@ -72,6 +72,9 @@ notebook included.
 | `LARGEDIFF_STREAM_LOG` | off | `1` logs one line per SSE stream attach/detach/abort — flip on when investigating lost pushes. |
 | `LARGEDIFF_METRICS` | on | `0` disables the local-log metrics (periodic `[metrics]` rollup + per-session summary lines on stdout). |
 | `LARGEDIFF_METRICS_INTERVAL_MS` | `60000` | Rollup cadence, clamped to 1s–1h. Fields under `interval` are per-interval deltas; `gauges` are instantaneous. |
+| `LARGEDIFF_TRUST_PROXY` | `1` | Trust the leftmost `X-Forwarded-For` entry as the client IP for rate limiting. The app requires a TLS-terminating proxy; set `0` if the process is ever directly reachable (a direct client can spoof XFF into a fresh bucket per request). |
+| `LARGEDIFF_RATE_LIMIT_CREATE` | `60/1` | Session-creation budget as `burst/per-second` per IP. |
+| `LARGEDIFF_RATE_LIMIT_COMMANDS` | `150/60` | Command + page + stream-attach budget as `burst/per-second` per IP. Generous on purpose — NATs share one bucket. Over-budget requests get 429 + `retry-after` and are counted as `rate_limited` in the metrics. |
 | `NODE_ENV` | — | `production` disables Bun's development mode (HMR, browser console echo). |
 
 Metrics land on stdout only (no HTTP endpoint); under systemd read them with
@@ -108,6 +111,7 @@ src/
 ├── render/           HTML builders: shell, file windows, sidebar, /doc page
 ├── store/            DiffStore (shared, content-addressed) + SessionStore (SQLite)
 └── client/           browser modules: highlights, sidebar, poke, measure, styles
+vendor/               datastar-1.0.0.js — vendored Datastar bundle (no CDN)
 .beans/               issue tracker (beans CLI); the engineering notes live here
 .claude/              project-shared Claude Code config + hooks
 ```
