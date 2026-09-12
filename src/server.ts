@@ -689,12 +689,12 @@ const server = Bun.serve({
         },
       }),
 
-    // Vendored Datastar bundle (vendor/datastar-1.0.0.js) — was a jsdelivr
+    // Vendored Datastar bundle (vendor/datastar-1.0.3.js) — was a jsdelivr
     // CDN pin; serving it from here removes the supply-chain
     // script-injection lever entirely. Same no-store + BUILD_ID treatment
     // as the other static assets.
     "/static/datastar.js": () =>
-      new Response(Bun.file("vendor/datastar-1.0.0.js"), {
+      new Response(Bun.file("vendor/datastar-1.0.3.js"), {
         headers: {
           "content-type": "application/javascript; charset=utf-8",
           "cache-control": "no-store",

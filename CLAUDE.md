@@ -81,7 +81,7 @@ src/
 ├── highlight/        regex-based per-language tokenizer
 ├── render/           HTML fragment builders (shell, files, sidebar, /doc)
 └── client/           browser modules (highlights.ts, styles.css, …)
-vendor/               datastar-1.0.0.js (vendored Datastar bundle, no CDN)
+vendor/               datastar-1.0.3.js (vendored Datastar bundle, no CDN)
 .beans/               issue tracker (beans CLI)
 .claude/              project-shared Claude Code config + hooks
 ```

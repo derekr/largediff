@@ -111,7 +111,7 @@ src/
 ├── render/           HTML builders: shell, file windows, sidebar, /doc page
 ├── store/            DiffStore (shared, content-addressed) + SessionStore (SQLite)
 └── client/           browser modules: highlights, sidebar, poke, measure, styles
-vendor/               datastar-1.0.0.js — vendored Datastar bundle (no CDN)
+vendor/               datastar-1.0.3.js — vendored Datastar bundle (no CDN)
 .beans/               issue tracker (beans CLI); the engineering notes live here
 .claude/              project-shared Claude Code config + hooks
 ```
