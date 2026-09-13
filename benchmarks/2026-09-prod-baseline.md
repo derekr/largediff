@@ -50,6 +50,33 @@ Ranges still hurts Safari most (see the Highlight API notes in
 build — the pre-JSX Safari baseline for comparison lives in
 largediff-3s9i's history and `.beans/largediff-pkrf`.
 
+## STP 27.0 (same harness, `__ldMeasure` percentiles + selftest)
+
+| metric | spans | ranges |
+| --- | --- | --- |
+| timeouts | 0/12 ×3 | 0/12 ×3 |
+| median morph | 125.5–136 ms | 129.5–143 ms |
+| worst frame gap | **65–74 ms** | **862–873 ms** |
+| selftest drops | 0/12 | 0/12 |
+| wire (run total) | 222.7 KB vs 3.89 MB | 232.9–243.2 KB vs 6.0 MB |
+
+Notes:
+- The jump-median story holds across WebKits: STP medians (125–143 ms)
+  sit right on release Safari's and Chrome's — the wire + server path
+  dominates, not the engine.
+- Delivery is *cleaner* in STP: 0/12 drops in both modes (release
+  Safari: 1/12 spans, 4/12 ranges).
+- But the ranges **paint wall is unchanged in the newest WebKit**:
+  worst frame gap 862–873 ms vs 65–74 ms for spans — an 11× stall per
+  jump, matching the css-highlight-lab measurements (436–1436 ms per
+  morph registration). Note the wire chip also reports ~6.11 MB
+  uncompressed for ranges vs 3.89 MB for spans in STP — the offset
+  lists carry the same token data, but STP's innerHTML accounting
+  inflates on morph churn; Chrome reports 242 KB for the identical
+  payload shape.
+- STP wire 222.7 KB ≈ release Safari's 223.0 KB for spans: no meaningful
+  encoding difference between the two WebKits on this build.
+
 ## Server side (during the same window, from `[metrics]` rollups)
 
 - push render total: **p50 9–18 ms, p90 18–25.6 ms, max 29.7 ms**

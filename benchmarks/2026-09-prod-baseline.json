@@ -23,6 +23,21 @@
     "spans": { "drops": 1, "total": 12 },
     "ranges": { "drops": 4, "total": 12 }
   },
+  "stp": {
+    "version": "27.0, visible window, __ldMeasure 12 jumps x3 + selftest",
+    "jumps_spans": [
+      { "timedOut": 0, "medianMorphMs": 131.5, "worstFrameGapMs": 74, "medianHtmlChars": 258410, "wireChip": "222.7 KB on the wire vs 3.89 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 136, "worstFrameGapMs": 65, "medianHtmlChars": 258410, "wireChip": "222.7 KB on the wire vs 3.89 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 125.5, "worstFrameGapMs": 74, "medianHtmlChars": 258410, "wireChip": "222.7 KB on the wire vs 3.89 MB uncompressed (br)" }
+    ],
+    "jumps_ranges": [
+      { "timedOut": 0, "medianMorphMs": 129.5, "worstFrameGapMs": 862, "medianHtmlChars": 242358, "wireChip": "232.9 KB on the wire vs 6.11 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 143, "worstFrameGapMs": 867, "medianHtmlChars": 242358, "wireChip": "232.9 KB on the wire vs 6.11 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 134.5, "worstFrameGapMs": 873, "medianHtmlChars": 242358, "wireChip": "243.2 KB on the wire vs 5.96 MB uncompressed (br)" }
+    ],
+    "selftest_spans": { "drops": 0, "total": 12 },
+    "selftest_ranges": { "drops": 0, "total": 12 }
+  },
   "server": {
     "pushTotalMs": { "p50": "9-18ms across busy intervals", "p90": "18-25.6ms", "max": "29.7ms" },
     "wireRatioRange": "9.5-217 (interval mix dependent)",
