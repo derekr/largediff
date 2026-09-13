@@ -109,6 +109,25 @@ The one thing that can't be abstracted away is the *interplay* — the
 throttle→push→slice loop spans those four session/render files, which is
 why it's presented as a unit rather than a module.
 
+### Numbers (prod, 200k-line diff, real TLS + proxy path)
+
+Full run: [`benchmarks/2026-09-prod-baseline.md`](benchmarks/2026-09-prod-baseline.md).
+
+| | Chrome 153 | Safari 26.6 | STP 27 |
+| --- | --- | --- | --- |
+| first paint | 378 ms | — | — |
+| click → morph | 88 ms | — | — |
+| jump median | 120–164 ms | 131–136 ms | 125–143 ms |
+| worst frame gap | 50–67 ms | — | 65–74 ms |
+| late morphs / 12 | 0 | 1 (spans) · 4 (ranges) | 0 · 0 |
+| scroll fling (60px/frame) | 100% covered, 0 px lag | — | — |
+| wire, 12 jumps | 223 KB vs 3.93 MB | 223 KB | 223 KB |
+
+Jump latency is a property of the path (wire + server + proxy — every
+engine lands together); delivery is a property of the engine; and the
+CSS Custom Highlight ranges mode stalls WebKit's paint 11× (862–873 ms
+frame gaps in STP) — which is why spans is the default.
+
 ## SSE delivery lab
 
 The standalone SSE-delivery harness — built to isolate a WebKit regression
