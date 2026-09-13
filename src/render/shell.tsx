@@ -211,6 +211,15 @@ function AppInner(args: AppInnerArgs) {
             Full bleed
           </button>
         </div>
+        <a
+          class="repo-link"
+          href="https://github.com/derekr/largediff"
+          target="_blank"
+          rel="noopener"
+          title="View source on GitHub"
+        >
+          repo ↗
+        </a>
         <WireChip stats={wireStats} />
         <span class="sid">
           session <code>{sid}</code>
