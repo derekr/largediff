@@ -8,12 +8,23 @@ real TLS + proxy path. JSON alongside: `2026-09-prod-baseline.json`.
 Re-run this after any change that touches the render/projection path;
 compare medians + worst, not single numbers.
 
-## First load (Chrome)
+## First load
 
-| metric | value |
-| --- | --- |
-| navigation → 100+ diff rows painted | **378 ms** |
-| first sidebar click → morph applied (over the proxy) | **88 ms** |
+Paint-timing probe (PerformanceObserver, `first-contentful-paint`) plus a
+scripted sidebar click on a non-active file → morph, over the real TLS +
+proxy path:
+
+| metric | Chrome 153 | Safari 26.6 | STP 27 |
+| --- | --- | --- | --- |
+| first contentful paint | 312 ms | 300–323 ms | 281–293 ms |
+| click → morph | 98–112 ms | 131–145 ms | 133–158 ms |
+
+(Earlier runs reported "378 ms to rows painted" for Chrome — a
+navigation→DOM proxy; the FCP probe above is the honest number and
+it's in the same ballpark. Headless Chrome omits buffered paint
+entries, so the observer form is the one that works everywhere; the
+first Safari bench simply lacked this phase, which is why earlier
+tables showed dashes.)
 
 ## Jump latency (Chrome, `__ldMeasure`, 12 jumps × 3 fresh sessions)
 

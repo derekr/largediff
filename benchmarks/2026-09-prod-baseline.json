@@ -5,7 +5,12 @@
   "machine": "MacBook Air (local), headless, single client",
   "chrome": {
     "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
-    "firstLoad": { "rowsPaintedMs": 378, "firstInteractionToMorphMs": 88 },
+    "firstLoad": {
+      "fcpMs": 312,
+      "clickToMorphMs": "98-112 across 4 runs",
+      "rowsPaintedProxyMs": 378,
+      "note": "headless Chrome omits buffered paint entries; PerformanceObserver {type:'paint', buffered:true} works"
+    },
     "jumps_spans": [
       { "timedOut": 0, "medianMorphMs": 119.8, "worstFrameGapMs": 66.7, "medianHtmlChars": 258410, "wireChip": "223.0 KB on the wire vs 3.93 MB uncompressed (br)" },
       { "timedOut": 0, "medianMorphMs": 154.55, "worstFrameGapMs": 50.1, "medianHtmlChars": 258410, "wireChip": "223.0 KB on the wire vs 3.93 MB uncompressed (br)" },
@@ -21,10 +26,12 @@
   "safari": {
     "version": "26.6 release, visible window, selftest 12 jumps @1500ms gap",
     "spans": { "drops": 1, "total": 12 },
-    "ranges": { "drops": 4, "total": 12 }
+    "ranges": { "drops": 4, "total": 12 },
+    "firstLoad": { "fcpMs": "300-323", "clickToMorphMs": "131-145" }
   },
   "stp": {
     "version": "27.0, visible window, __ldMeasure 12 jumps x3 + selftest",
+    "firstLoad": { "fcpMs": "281-293", "clickToMorphMs": "133-158" },
     "jumps_spans": [
       { "timedOut": 0, "medianMorphMs": 131.5, "worstFrameGapMs": 74, "medianHtmlChars": 258410, "wireChip": "222.7 KB on the wire vs 3.89 MB uncompressed (br)" },
       { "timedOut": 0, "medianMorphMs": 136, "worstFrameGapMs": 65, "medianHtmlChars": 258410, "wireChip": "222.7 KB on the wire vs 3.89 MB uncompressed (br)" },

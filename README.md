@@ -135,8 +135,8 @@ Full run: [`benchmarks/2026-09-prod-baseline.md`](benchmarks/2026-09-prod-baseli
 
 | | Chrome 153 | Safari 26.6 | STP 27 |
 | --- | --- | --- | --- |
-| first paint | 378 ms | — | — |
-| click → morph | 88 ms | — | — |
+| first contentful paint | 312 ms | 300–323 ms | 281–293 ms |
+| click → morph | 98–112 ms | 131–145 ms | 133–158 ms |
 | jump median | 120–164 ms | 131–136 ms | 125–143 ms |
 | worst frame gap | 50–67 ms | — | 65–74 ms |
 | late morphs / 12 | 0 | 1 (spans) · 4 (ranges) | 0 · 0 |
