@@ -1,0 +1,767 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #656d76;
+  --border: #d0d7de;
+  --sidebar-bg: #f6f8fa;
+  --topbar-bg: #f6f8fa;
+  --line-height: 20px;
+  /* Sizes each `.file-row` box. The sidebar is server-virtualized: every
+     row's absolute `top` arrives inline, computed from
+     SIDEBAR_ROW_HEIGHT_PX (32) in render/sidebar.ts — this value only
+     sizes the boxes sitting on that grid, so keep it matching the server
+     constant unless the mismatch is deliberate (the mobile @media block
+     at the bottom of this file bumps it for tap targets).
+     src/client/sidebar.ts does not read it — it only forwards scroll
+     telemetry. */
+  --sidebar-row-height: 32px;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --kw: #cf222e;
+  --str: #0a3069;
+  --fn: #8250df;
+  --type: #953800;
+  --comment: #6e7781;
+  --num: #0550ae;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #7d8590;
+    --border: #30363d;
+    --sidebar-bg: #161b22;
+    --topbar-bg: #161b22;
+    --kw: #ff7b72;
+    --str: #a5d6ff;
+    --fn: #d2a8ff;
+    --type: #ffa657;
+    --comment: #8b949e;
+    --num: #79c0ff;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  /* `dvh` follows the visible viewport on mobile — when iOS Safari's URL
+     bar collapses or expands, the layout reflows to fit. Browsers that
+     don't know `dvh` drop the declaration and the height resolves to the
+     inherited size. `dvh` has shipped since Chrome 108 / Safari 16.4 /
+     Firefox 101 — older engines than anything else this app is tested
+     against — so we don't ship a `100vh` legacy fallback. */
+  height: 100dvh;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  height: 100%;
+  min-height: 0;
+}
+
+/* `#app` is the fat-morph root: the entire content tree lives inside it
+   so a single `selector #app` morph can replace everything in one shot.
+   It owns the topbar + layout grid the body used to own — that grid was
+   moved here when the wrapper was introduced so its `grid-template-rows`
+   still sizes the layout row to fill the remaining viewport height. */
+#app {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  height: 100%;
+}
+
+.topbar {
+  border-bottom: 1px solid var(--border);
+  background: var(--topbar-bg);
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  /* Lift above the mobile drawer (z 30) and its backdrop (z 25) so the
+     hamburger stays tappable while the drawer is open. On desktop the
+     drawer styles never engage, so this is essentially decorative. */
+  position: relative;
+  z-index: 40;
+}
+
+.topbar h1 {
+  font-size: 1rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.topbar .tabs {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.topbar .tab {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  color: var(--muted);
+}
+
+.topbar .tab.active {
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+.topbar .back-to-top {
+  margin-left: auto;
+  appearance: none;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.topbar .back-to-top:hover {
+  background: color-mix(in srgb, var(--border) 30%, transparent);
+  color: var(--fg);
+}
+
+.topbar .chrome-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 0.75rem;
+}
+
+.topbar .chrome-toggle button {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font: inherit;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  border-left: 1px solid var(--border);
+  touch-action: manipulation;
+}
+
+.topbar .chrome-toggle button:first-child {
+  border-left: none;
+}
+
+.topbar .chrome-toggle button:hover {
+  background: color-mix(in srgb, var(--border) 30%, transparent);
+}
+
+.topbar .chrome-toggle button.active {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.topbar .sid {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.topbar .wire-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-family: var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.topbar .wire-chip .wire-label {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.62rem;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+.topbar .wire-chip .wire-value {
+  color: #2ea043;
+  font-weight: 500;
+}
+
+.topbar .wire-chip .wire-hint {
+  color: var(--muted);
+  font-size: 0.66rem;
+  opacity: 0.85;
+}
+
+.topbar code {
+  font-family: var(--mono);
+  font-size: 0.85em;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 0;
+  /* Visual breathing room between the file tree and the diff column. The
+     individual diff rows already have their own per-mode left margin in
+     github chrome, but the gap is needed so the sidebar's right edge and
+     the diff's left edge don't read as touching. */
+  column-gap: 16px;
+}
+
+#file-tree {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  overflow: auto;
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#file-tree .file-tree-header {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  position: sticky;
+  top: 0;
+  background: var(--sidebar-bg);
+  z-index: 1;
+}
+
+#file-tree .file-list {
+  overflow: auto;
+  flex: 1 1 auto;
+  position: relative;
+}
+
+/* `.file-rows` claims the full virtual height (rows × 32px). The
+   server emits only the rows in the visible window, each absolutely
+   positioned at its real pixel top. Browser-native scroll over the
+   full virtual height keeps the scrollbar geometry honest. */
+#file-tree .file-rows {
+  position: relative;
+}
+
+#file-tree .file-row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: var(--sidebar-row-height);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 0.75rem;
+  text-decoration: none;
+  color: inherit;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  font-size: 0.8rem;
+  box-sizing: border-box;
+  /* Skips the double-tap-to-zoom heuristic on iOS Safari, which adds
+     ~300ms latency to every tap on an interactive control. We don't
+     pinch-zoom code rows anyway. Same rule lives on the chrome-toggle
+     buttons and hamburger below. */
+  touch-action: manipulation;
+}
+
+#file-tree .file-row:hover {
+  background: color-mix(in srgb, var(--border) 30%, transparent);
+}
+
+#file-tree .file-row .path {
+  flex: 1 1 auto;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+#file-tree .file-row .meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  flex: 0 0 auto;
+}
+
+#file-tree .file-row .lang {
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+#file-tree .file-row .adds {
+  color: #2ea043;
+}
+
+#file-tree .file-row .dels {
+  color: #f85149;
+}
+
+/* Active row — placed after the generic per-cell rules so the higher
+   specificity selectors don't trip Biome's `noDescendingSpecificity` lint. */
+#file-tree .file-row.active {
+  background: color-mix(in srgb, var(--fn) 22%, transparent);
+  border-left: 3px solid var(--fn);
+  /* Offset the thicker accent so the text doesn't jump horizontally. */
+  padding-left: calc(0.75rem - 1px);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+#file-tree .file-row.active .path,
+#file-tree .file-row.active .lang {
+  color: var(--fg);
+}
+
+#scroller {
+  overflow: auto;
+  position: relative;
+  /* Prevent the scroll chain from rubber-banding the page on iOS Safari
+     when the user flicks past the top or bottom of the diff. */
+  overscroll-behavior: contain;
+}
+
+/* Hamburger button: hidden on desktop, shown via the mobile @media block. */
+.topbar .menu-toggle {
+  display: none;
+  appearance: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--fg);
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  margin: 0;
+  padding: 0;
+  touch-action: manipulation;
+}
+.topbar .menu-toggle:hover {
+  background: color-mix(in srgb, var(--border) 40%, transparent);
+}
+
+/* Backdrop sits behind the drawer when open. Always in the DOM so its
+   transitions interpolate cleanly; pointer-events flip only when open. */
+#drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease-out;
+  z-index: 25;
+}
+
+#ds-window {
+  position: relative;
+}
+
+/* ---------------------------------------------------------------------------
+   File sections. Each `<section data-file>` is absolutely positioned at its
+   file's pixel range. Inside the section, the `.file-card-header` is
+   `position:sticky; top:0` so the browser pins it to the scroller's top edge
+   as the user scrolls past, and the sticky stops at the section's bottom so
+   the next file's chrome takes over naturally.
+
+   Two chrome modes share the same DOM, differentiated by `body[data-chrome]`:
+     - github: per-file rounded containers with a 32px transparent top gap
+     - bleed:  continuous, full-bleed look (chrome fills the 72px slot)
+   --------------------------------------------------------------------------- */
+
+#ds-window > .file-section {
+  position: absolute;
+  left: 0;
+  right: 0;
+  /* Defer style + paint work on off-screen sections. The section
+     itself has an explicit inline `height` (server-stamped) so the
+     scrollbar geometry stays correct regardless of activation state.
+     The browser only styles each section's ~3 K token spans when it
+     enters the viewport. We previously avoided this because of a
+     Safari "blank diff after jump" repro (bean largediff-f2q4); the
+     repro was on a pre-fat-morph architecture where Idiomorph
+     reconstructed the section's subtree on every push. With
+     file-windowed sections that stay mounted across scrolls
+     (Idiomorph matches by `#f-<fid>` and only morphs row content),
+     activation no longer races with morphs. Re-evaluated under the
+     current architecture. */
+  content-visibility: auto;
+}
+
+#ds-window > .file-section > .file-rows {
+  position: relative;
+}
+
+.file-card-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 40px;
+  padding: 0 0.75rem;
+  background: var(--sidebar-bg);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.file-card-header .caret {
+  color: var(--muted);
+  font-size: 0.7rem;
+  flex: 0 0 auto;
+}
+
+#ds-window .file-card-header .path {
+  flex: 1 1 auto;
+  color: var(--fg);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#ds-window .file-card-header .meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 0.75rem;
+  flex: 0 0 auto;
+}
+
+#ds-window .file-card-header .lang {
+  text-transform: lowercase;
+}
+
+#ds-window .file-card-header .adds {
+  color: #2ea043;
+}
+
+#ds-window .file-card-header .dels {
+  color: #f85149;
+}
+
+/* ---- Inner rows: absolutely positioned within `.file-rows` ---- */
+
+#ds-window .row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  white-space: pre;
+  display: flex;
+  align-items: stretch;
+}
+
+#ds-window .row.hunk-header {
+  height: 24px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  align-items: center;
+  padding: 0 0.75rem;
+  background: color-mix(in srgb, var(--num) 14%, transparent);
+}
+
+#ds-window .row.hunk-header .hunk-label {
+  font-family: var(--mono);
+  font-size: 0.78rem;
+}
+
+#ds-window .row.line {
+  height: var(--line-height);
+  line-height: var(--line-height);
+}
+
+#ds-window .row.line .ln {
+  display: inline-block;
+  width: 5ch;
+  flex: 0 0 auto;
+  text-align: right;
+  padding: 0 0.5ch;
+  color: var(--muted);
+  user-select: none;
+  background: color-mix(in srgb, var(--sidebar-bg) 60%, transparent);
+}
+
+#ds-window .row.line .marker {
+  display: inline-block;
+  width: 2ch;
+  flex: 0 0 auto;
+  text-align: center;
+  color: var(--muted);
+  user-select: none;
+  background: color-mix(in srgb, var(--sidebar-bg) 60%, transparent);
+}
+
+#ds-window .row.line .text {
+  flex: 1 1 auto;
+  padding-left: 0.5ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#ds-window .row.line.add .marker {
+  color: #2ea043;
+  background: color-mix(in srgb, #2ea043 22%, transparent);
+}
+
+#ds-window .row.line.add .text {
+  background: color-mix(in srgb, #2ea043 12%, transparent);
+}
+
+#ds-window .row.line.del .marker {
+  color: #f85149;
+  background: color-mix(in srgb, #f85149 22%, transparent);
+}
+
+#ds-window .row.line.del .text {
+  background: color-mix(in srgb, #f85149 12%, transparent);
+}
+
+/* ===========================================================================
+   `github` chrome — per-file rounded containers with 32px transparent gap
+   above each file's chrome
+   =========================================================================== */
+
+/* Chrome-mode rules are scoped to `#ds-window[data-chrome=...]` rather
+   than `body[data-chrome=...]`. The body-prefixed form forced the
+   browser to consider every descendant of body when invalidating —
+   which during a fat morph meant style recalcs touching 3K-4K elements
+   per push. Anchoring the selector to `#ds-window` itself limits
+   recalc scope to the diff subtree where these rules actually apply. */
+
+#ds-window[data-chrome="github"] > .file-section {
+  /* Mirror the layout column-gap with a 16px right inset; transparent gap
+     above the chrome lives as padding-top so the chrome's flow position is
+     32px below the section's top edge. */
+  right: 16px;
+  padding-top: 32px;
+}
+
+#ds-window[data-chrome="github"] .file-card-header {
+  border-radius: 6px 6px 0 0;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+#ds-window[data-chrome="github"] .file-rows .row {
+  right: 0;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+#ds-window[data-chrome="github"] .file-rows .row[data-last-in-file] {
+  border-bottom: 1px solid var(--border);
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+}
+
+/* ===========================================================================
+   `bleed` chrome — full-bleed, no transparent gap, 72px chrome height
+   =========================================================================== */
+
+#ds-window[data-chrome="bleed"] .file-card-header {
+  height: 72px;
+  border-radius: 0;
+  border-left: none;
+  border-right: none;
+}
+
+.placeholder {
+  color: var(--muted);
+  padding: 1rem;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.placeholder code {
+  font-family: var(--mono);
+  font-style: normal;
+  font-size: 0.95em;
+  background: var(--sidebar-bg);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+/* ---------------------------------------------------------------------------
+   Syntax token colouring.
+   Server emits `<span class="kw">…</span>` (etc.) inside each row's
+   `.text` span. We retired the CSS Custom Highlight API approach because
+   WebKit's implementation repaints per-range with no batching — see bean
+   largediff-ta4r. Per-class colouring is what GitHub / Monaco / CodeMirror
+   all do at scale, and the browser only pays normal text rendering cost.
+   --------------------------------------------------------------------------- */
+
+#ds-window .row.line .text .kw {
+  color: var(--kw);
+}
+#ds-window .row.line .text .str {
+  color: var(--str);
+}
+#ds-window .row.line .text .fn {
+  color: var(--fn);
+}
+#ds-window .row.line .text .typ {
+  color: var(--type);
+}
+#ds-window .row.line .text .cmt {
+  color: var(--comment);
+  font-style: italic;
+}
+#ds-window .row.line .text .num {
+  color: var(--num);
+}
+
+/* ---------------------------------------------------------------------------
+   CSS Custom Highlight API mode (`?hl=ranges`).
+
+   The same six token colours, reached through the highlight registry
+   instead of per-token spans. Only active when the client has installed
+   ranges (see client/ranges.ts); in the default spans mode the registry is
+   empty and none of this matches.
+
+   Two things worth noting for anyone comparing the two modes:
+
+   1. `::highlight()` supports a restricted property set — colour,
+      background-color, text-decoration, text-shadow, -webkit-text-stroke.
+      `font-style` is NOT among them, so comments cannot be italicised here
+      the way `.cmt` above does. That is a spec limitation, not a bug.
+   2. Highlights paint *above* the originating element's own colour, so the
+      row's base `color` still shows through for untokenised runs — which is
+      what we want.
+--------------------------------------------------------------------------- */
+::highlight(kw) {
+  color: var(--kw);
+}
+::highlight(str) {
+  color: var(--str);
+}
+::highlight(fn) {
+  color: var(--fn);
+}
+::highlight(typ) {
+  color: var(--type);
+}
+::highlight(cmt) {
+  color: var(--comment);
+}
+::highlight(num) {
+  color: var(--num);
+}
+
+/* ===========================================================================
+   Mobile (≤ 768px)
+   ===========================================================================
+   Single-column layout: the diff fills the viewport; the file tree becomes
+   a slide-out drawer over it. Backdrop closes the drawer on tap. Topbar
+   collapses to brand + hamburger. Per the project notes, the chrome toggle
+   doesn't carry its weight on a phone — hidden here. */
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0.5rem 0.75rem;
+    gap: 0.6rem;
+  }
+  .topbar .menu-toggle {
+    display: inline-flex;
+  }
+  .topbar h1 {
+    font-size: 0.95rem;
+  }
+  .topbar .tabs,
+  .topbar .chrome-toggle,
+  .topbar .sid {
+    display: none;
+  }
+
+  /* Layout drops the sidebar column entirely. */
+  .layout {
+    grid-template-columns: 1fr;
+    column-gap: 0;
+  }
+
+  /* File tree → fixed-position drawer. Starts below the topbar so the
+     first row isn't hidden behind it; the topbar's z 40 keeps the
+     hamburger tappable while the drawer is open.
+
+     The transition is gated behind `body.ready` so the *initial* style
+     application (which the browser treats as a property change from no-
+     transform to translateX(-101%)) doesn't animate. Without this, on
+     mobile refresh the drawer visibly slides from on-screen to off-
+     screen. The `ready` class is added on the second rAF after load. */
+  #file-tree {
+    position: fixed;
+    left: 0;
+    top: 53px;
+    bottom: 0;
+    width: min(86vw, 320px);
+    transform: translateX(-101%);
+    z-index: 30;
+    will-change: transform;
+    border-right: 1px solid var(--border);
+  }
+  body.ready #file-tree {
+    transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  body.ready #drawer-backdrop {
+    transition: opacity 180ms ease-out;
+  }
+  body.drawer-open #file-tree {
+    transform: translateX(0);
+  }
+  body.drawer-open #drawer-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  /* While the drawer is open, lock background scroll. */
+  body.drawer-open {
+    overflow: hidden;
+  }
+
+  /* Touch tap targets — taller row boxes so taps land cleanly. The
+     server still positions rows on its fixed 32px grid
+     (SIDEBAR_ROW_HEIGHT_PX in render/sidebar.ts), so these boxes extend
+     into the next slot; only the box height changes here. */
+  :root {
+    --sidebar-row-height: 44px;
+  }
+  #file-tree .file-row {
+    font-size: 0.85rem;
+  }
+  #file-tree .file-row .path {
+    font-size: 0.82rem;
+  }
+
+  /* The diff column already takes 1fr; trim the in-content right margin
+     since there's no sidebar gap to balance any more. */
+  #ds-window[data-chrome="github"] > .file-section {
+    right: 0;
+  }
+}

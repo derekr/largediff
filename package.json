@@ -1,0 +1,21 @@
+{
+  "name": "largediff",
+  "module": "src/server.ts",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "bun --hot src/server.ts",
+    "start": "bun src/server.ts",
+    "fmt": "biome check --write .",
+    "check": "biome check . && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
