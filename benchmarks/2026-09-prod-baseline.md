@@ -64,8 +64,17 @@ Notes:
 - The jump-median story holds across WebKits: STP medians (125–143 ms)
   sit right on release Safari's and Chrome's — the wire + server path
   dominates, not the engine.
-- Delivery is *cleaner* in STP: 0/12 drops in both modes (release
-  Safari: 1/12 spans, 4/12 ranges).
+- **The delivery improvement has a named cause.** Bug 322401
+  ("Remove ReadableByteStreamFetchSourceEnabled flag",
+  <https://bugs.webkit.org/show_bug.cgi?id=322401>) went RESOLVED FIXED
+  on 2026-08-25 (commit `319790@main`, deleting `NonByteSource` and its
+  `feedStream()` drain) — the exact stranding path the sselab report
+  implicated (`../sselab/WEBKIT-BUG-DESCRIPTION.txt`, which predicted
+  that this removal would land before the underlying fix). Release
+  Safari 26.6 shipped 2026-07-27, five weeks before the removal, and
+  still drops (1/12 spans, 4/12 ranges). STP 27 builds after it deliver
+  **0/12 in both modes**. The buggy code path wasn't fixed — it was
+  deleted.
 - But the ranges **paint wall is unchanged in the newest WebKit**:
   worst frame gap 862–873 ms vs 65–74 ms for spans — an 11× stall per
   jump, matching the css-highlight-lab measurements (436–1436 ms per
