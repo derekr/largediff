@@ -53,6 +53,26 @@ bun test
   (scroll position, settings), persisted in SQLite so restarts recover
   sessions. The synthetic diff and its token caches are content-addressed by
   `(seed, fileId)` and shared across every session on the same seed.
+- **The session is the resource.** Everything you'd call "where I am" —
+  active file, scroll position, settings — lives as server state under one
+  URL (`/sessions/:sid`). That's the load-bearing decision: any actor that
+  can POST a command can move that state, and every state change flows to
+  the open stream as a projection. The browser never owns the truth, so it
+  never has to migrate, sync, or restore it — a stale tab is harmless, a
+  reload re-projects.
+
+  This is what makes the URL a **capability**: whoever holds it holds the
+  session. Which is exactly the same lever for things the demo doesn't
+  ship but the shape supports for free — a second actor driving the same
+  session (follow-along review, an agent or tool controlling what's on
+  screen), pinning a session to a diff revision so the code on screen
+  can't change underneath a review (content-addressed seeds already give
+  the snapshot; a "new commits — refresh?" prompt is just another
+  command), or replaying a session's command log as a record of the
+  review. It's also already load-bearing in-repo: the measurement agents
+  (`?selftest`, `__ldMeasure`) drive sessions through the same POST
+  surface users do, and rate limiting has one choke point to guard
+  because all mutation flows through commands.
 
 ### Start here
 
