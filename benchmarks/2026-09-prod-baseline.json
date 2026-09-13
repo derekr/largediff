@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-12",
+  "prodCommit": "216626d9 (first deploy of the JSX + hardening build)",
+  "prodUrl": "https://largediff.yagni.club",
+  "machine": "MacBook Air (local), headless, single client",
+  "chrome": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+    "firstLoad": { "rowsPaintedMs": 378, "firstInteractionToMorphMs": 88 },
+    "jumps_spans": [
+      { "timedOut": 0, "medianMorphMs": 119.8, "worstFrameGapMs": 66.7, "medianHtmlChars": 258410, "wireChip": "223.0 KB on the wire vs 3.93 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 154.55, "worstFrameGapMs": 50.1, "medianHtmlChars": 258410, "wireChip": "223.0 KB on the wire vs 3.93 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 163.55, "worstFrameGapMs": 66.7, "medianHtmlChars": 258410, "wireChip": "223.0 KB on the wire vs 3.93 MB uncompressed (br)" }
+    ],
+    "jumps_ranges": [
+      { "timedOut": 0, "medianMorphMs": 123.25, "worstFrameGapMs": 66.7, "medianHtmlChars": 242358, "wireChip": "232.3 KB on the wire vs 3.74 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 123.5, "worstFrameGapMs": 66.6, "medianHtmlChars": 242358, "wireChip": "232.3 KB on the wire vs 3.74 MB uncompressed (br)" },
+      { "timedOut": 0, "medianMorphMs": 121.1, "worstFrameGapMs": 66.6, "medianHtmlChars": 242358, "wireChip": "232.3 KB on the wire vs 3.74 MB uncompressed (br)" }
+    ],
+    "scrollFling": { "samples": 301, "coveredPct": 100, "maxLagPx": 0, "rowsRange": [478, 1016] }
+  },
+  "safari": {
+    "version": "26.6 release, visible window, selftest 12 jumps @1500ms gap",
+    "spans": { "drops": 1, "total": 12 },
+    "ranges": { "drops": 4, "total": 12 }
+  },
+  "server": {
+    "pushTotalMs": { "p50": "9-18ms across busy intervals", "p90": "18-25.6ms", "max": "29.7ms" },
+    "wireRatioRange": "9.5-217 (interval mix dependent)",
+    "rssDuringBench": "78 -> 125 MB"
+  }
+}
